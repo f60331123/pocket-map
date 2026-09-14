@@ -2136,21 +2136,7 @@ function importBackup(file){
   };
   rd.readAsText(file);
 }
-$('#avatarBtn').addEventListener('click',function(){
-  var existing=$('#meMenu');
-  if(existing){existing.remove();return}
-  this.parentElement.style.position='relative';
-  var m=document.createElement('div');m.id='meMenu';m.className='menu';
-  m.innerHTML=(S.user&&S.user.email
-    ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'（模擬登入）</div><button id="mLogout">登出</button>'
-    :'<button id="mLogin">登入 Google（模擬）</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>';
-  this.parentElement.appendChild(m);
-  var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginSim()});
-  document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
-  document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
-  var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();S.user=null;persist();$('#avatarBtn').textContent='訪';toast('已登出 — 釘點都還在，只是不標示帳號')});
-});
+
 document.addEventListener('click',function(e){
   var m=$('#meMenu');
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
