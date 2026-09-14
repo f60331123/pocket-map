@@ -6,7 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#F6F3EA">
-<title>口袋地圖 Pocket Pins — 貼上網址，把好店釘起來</title>
+<title>口袋地圖 Pocket Pins — 一鍵把好店釘起來</title>
+<meta name="description" content="看到好店，打開地圖釘一下就記下來：分類、筆記、導航，不用貼網址；登入 Google 還能雲端同步，換手機資料也跟著走。">
+<link rel="icon" type="image/png" href="logo.png">
+<meta property="og:title" content="口袋地圖 Pocket Pins — 一鍵把好店釘起來">
+<meta property="og:description" content="不用貼網址：打開地圖直接釘，記錄、分類、導航；登入 Google 雲端同步，換手機資料也不會掉。">
+<meta property="og:image" content="https://f60331123.github.io/pocket-map/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
@@ -2003,7 +2008,8 @@ function enterApp(){
 $('#googleBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp();toast('示範登入完成（真實版會走真正的 Google 帳號）')});
 $('#guestBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp()});
 /* ---------- 真實 Google 登入＋雲端同步（存到你自己的雲端硬碟隱藏資料夾） ---------- */
-function cidGet(){return (localStorage.getItem(KEY+'_cid')||'').trim()}
+var DEFAULT_CID='415901525252-gojdr4ttvlufk5binlqlkhfbkub5k5r1.apps.googleusercontent.com';/*使用者 Client ID 內建處：填入後朋友免貼金鑰*/
+function cidGet(){return ((DEFAULT_CID||'')||(localStorage.getItem(KEY+'_cid')||'')).trim()}
 function setSync(st,extra){
   var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'僅存本機（登入後自動同步）'}[st]||''}
   var r=document.querySelector('#mSyncRow');if(r)r.textContent=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'僅存本機',off:'未同步（僅本機）'})[st]||'';
