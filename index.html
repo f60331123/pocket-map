@@ -2036,6 +2036,10 @@ function loginGoogle(){
     }catch(e){toast('Google 登入啟動失敗：'+((e&&e.message)||e))}
   });
 }
+function loginRedirectFlow(){
+  var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
+  location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=token&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&include_granted_scopes=true&prompt=select_account';
+}
 function finishLogin(tok){
   setSync('syncing');
   fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}})
@@ -2105,10 +2109,10 @@ $('#avatarBtn').addEventListener('click',function(){
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
-    :'<button id="mLogin">登入 Google（開啟雲端同步）</button>')
+    :'<button id="mLogin">登入 Google（開啟雲端同步）</button><button id="mLogin2">登入 Google（相容模式—彈窗空白時用這個）</button>')
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button>';
   this.parentElement.appendChild(m);
-  var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginGoogle()});
+  var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginGoogle()});var lg2=document.querySelector('#mLogin2');if(lg2)lg2.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
@@ -2146,6 +2150,10 @@ document.addEventListener('click',function(e){
 load();
 enterApp();
 if(S.user&&S.user.real)setSync('local');
+(function(){var h=location.hash||'';
+if(h.indexOf('access_token=')>=0){var m=h.match(/access_token=([^&]+)/);history.replaceState(null,'',location.pathname+location.search);if(m)finishLogin(decodeURIComponent(m[1]).replace(/\+/g,' '))}
+else if(h.indexOf('error=')>=0){history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){toast('Google 登入取消')},600)}
+})();
 try{if(!localStorage.getItem(KEY+'_acctHint')){localStorage.setItem(KEY+'_acctHint','1');setTimeout(function(){toast('右上角頭像：登入 Google 開雲端同步，或下載／還原備份')},1100)}}catch(e){}
 })();
 </script>
