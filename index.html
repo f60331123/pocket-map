@@ -2391,8 +2391,13 @@ $('#avatarBtn').addEventListener('click',function(e){
   if(existing){existing.remove();return}
   this.parentElement.style.position='relative';
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
+  var roomBtns=wsRooms().map(function(rm,i){
+    var nm=wsDefaultRoomName(rm,i),cur=S.sharedRoom===rm.code;
+    return '<button type="button" data-menuws="'+escAttr(rm.code)+'" style="padding-left:18px;font-size:13px;'+(cur?'background:#F3F1E7;font-weight:700;':'')+'">↳ '+esc(nm)+'</button>';
+  }).join('');
   m.innerHTML='<button id="mFb">登入</button><div id="mSyncRow" style="font-size:11.5px;color:#8A8674;padding:2px 4px 8px;text-align:left"></div><button id="mPersonal">個人地圖</button>'
     +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:42px;text-align:center;font-size:18px;flex:none" title="新增或加入共用地圖">＋</button></div>'
+    +(roomBtns?'<div style="margin:4px 0 2px">'+roomBtns+'</div>':'')
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
@@ -2402,8 +2407,9 @@ $('#avatarBtn').addEventListener('click',function(e){
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
-  document.querySelector('#mAddWs').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();m.remove();setTimeout(function(){wsQuickAdd()},0)});
+  document.querySelector('#mAddWs').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();m.remove();setTimeout(function(){wsQuickAdd(function(){sharedUI()})},0)});
   document.querySelector('#mPersonal').addEventListener('click',function(){m.remove();if(S.sharedRoom)wsSwitch('',function(){toast('已切回個人地圖')});else toast('現在就是在你的個人地圖')});
+  m.querySelectorAll('[data-menuws]').forEach(function(b){b.addEventListener('click',function(){var code=b.dataset.menuws;m.remove();if(S.sharedRoom===code){toast('已經在使用這張共用地圖');return}wsSwitch(code,function(){toast('已切換到共用地圖')})})});
   renderAcctUI();
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
@@ -2463,7 +2469,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v97';
+var APP_VER='v99';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2886,6 +2892,22 @@ function wsHydrateRooms(done){
   if(!left){if(done)done();return}
   rooms.forEach(function(r){wsRefreshRoomInfo(r.code,function(){left--;if(left<=0&&done)done()})});
 }
+function wsRenamePrompt(code,onDone){
+  var rm=wsRoomObj(code)||{code:code},ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard"><h4>更改地圖名稱</h4>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left">最多6個字</div>'
+    +'<input class="txt" id="wsRenameTxt" maxlength="6" value="'+escAttr(rm.name||'')+'" placeholder="例如：跟阿嬌的" style="width:100%;margin-top:8px;font-size:16px">'
+    +'<div class="ceBtns"><button type="button" id="wsRenameCancel">取消</button><button type="button" class="primary" id="wsRenameOk">儲存</button></div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('wsRenameCancel').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
+  document.getElementById('wsRenameOk').addEventListener('click',function(){
+    var nm=(document.getElementById('wsRenameTxt').value||'').trim();
+    wsUpsertRoom({code:code,name:nm});
+    var next=function(){ov.remove();if(onDone)onDone();toast('地圖名稱已更新')};
+    if(FB.db&&AUTH.user)FB.db.ref('shared/'+code+'/__meta').update({name:nm||('共用地圖')}).then(next).catch(function(e){toast('改名失敗：'+((e&&e.message)||e))});
+    else next();
+  });
+}
 function wsQuickAdd(onDone){
   var rooms=wsRooms();
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
@@ -2915,7 +2937,7 @@ function wsQuickAdd(onDone){
         :'<input class="txt" id="wsDlgCode" maxlength="8" placeholder="輸入 8 碼邀請碼" value="'+escAttr(joinCode)+'" style="width:100%;margin-top:6px;font-size:16px;text-transform:uppercase"><div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">朋友建立後把邀請碼傳給你；你輸入完成就會加入同一張地圖。</div>')
       +'<div class="ceBtns"><button type="button" id="wsAddCancel">取消</button><button type="button" class="primary" id="wsDoDone">'+(createOn?'完成並建立':'完成並加入')+'</button></div></div>';
     document.getElementById('wsModeCreate').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();mode='create';render()});
-    document.getElementById('wsModeJoin').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();joinCode=(document.getElementById('wsDlgCode').value||'').trim().toUpperCase();mode='join';render()});
+    document.getElementById('wsModeJoin').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();joinCode='';mode='join';render()});
     document.getElementById('wsAddCancel').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
     var copyBtn=document.getElementById('wsCopyCode');
     if(copyBtn)copyBtn.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(createCode).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
@@ -2925,8 +2947,8 @@ function wsQuickAdd(onDone){
       if(mode==='create'){
         var code=createCode,roomName=nameTxt||('共用地圖 '+(wsRooms().length+1));
         var payload={'__meta':{name:roomName,creator:AUTH.user.uid,created:Date.now()}};payload['members/'+AUTH.user.uid]=true;
-        wsUpsertRoom({code:code,name:roomName,role:'owner',creator:AUTH.user.uid,membersCount:1});
         FB.db.ref('shared/'+code).update(payload).then(function(){
+          wsUpsertRoom({code:code,name:roomName,role:'owner',creator:AUTH.user.uid,membersCount:1});
           wsSwitch(code,function(){wsRefreshRoomInfo(code,function(){ov.remove();if(onDone)onDone();toast('共用地圖已建立 — 把邀請碼傳給朋友就能一起用')})});
         }).catch(function(e){btn.disabled=false;toast('建立共用地圖失敗：'+((e&&e.message)||e))});
       }else{
@@ -2936,8 +2958,10 @@ function wsQuickAdd(onDone){
         FB.db.ref('shared/'+code+'/__meta').once('value').then(function(s){
           var meta=s.val();
           if(!meta){btn.disabled=false;toast('找不到這組邀請碼，請再確認一次');return}
-          wsUpsertRoom({code:code,name:nameTxt||meta.name||'',role:'member',creator:meta.creator||'',membersCount:0});
-          wsSwitch(code,function(){wsRefreshRoomInfo(code,function(){ov.remove();if(onDone)onDone();toast('已加入共用地圖')})});
+          wsSwitch(code,function(){
+            wsUpsertRoom({code:code,name:nameTxt||meta.name||'',role:'member',creator:meta.creator||'',membersCount:0});
+            wsRefreshRoomInfo(code,function(){ov.remove();if(onDone)onDone();toast('已加入共用地圖')});
+          });
         }).catch(function(e){btn.disabled=false;toast('加入共用地圖失敗：'+((e&&e.message)||e))});
       }
     });
@@ -2969,7 +2993,7 @@ function sharedUI(){
       var nm=wsDefaultRoomName(rm,i);
       var fs=nm.length<=4?15:(nm.length<=5?14:13);
       var act=(rm.role==='owner')?'刪除':'退出';
-      h+='<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>👥</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:8px 10px">'+act+'</button></div>';
+      h+='<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>👥</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><div style="display:flex;flex-direction:column;gap:4px"><button type="button" data-wsrename="'+rm.code+'" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px">改名</button><button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:6px 8px">'+act+'</button></div></div>';
     });
     h+='</div>';
     if(S.sharedRoom){
@@ -2985,6 +3009,7 @@ function sharedUI(){
     var ccb=document.getElementById('wsCurCopy');
     if(ccb)ccb.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(S.sharedRoom).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
     ov.querySelectorAll('[data-ws]').forEach(function(b){b.addEventListener('click',function(){var c=b.dataset.ws;if(S.sharedRoom===c){toast('已經在使用這個共用地圖');return}wsSwitch(c,function(){hydrated=false;render()})})});
+    ov.querySelectorAll('[data-wsrename]').forEach(function(b){b.addEventListener('click',function(){var code=b.dataset.wsrename;ov.remove();wsRenamePrompt(code,function(){sharedUI()})})});
     ov.querySelectorAll('[data-wsact]').forEach(function(b){b.addEventListener('click',function(){
       var code=b.dataset.wsact,rm=wsRoomObj(code);if(!rm||!AUTH.user)return;
       if(rm.role==='owner'){
