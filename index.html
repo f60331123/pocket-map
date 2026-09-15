@@ -2211,8 +2211,8 @@ function doPush(tok){
   pre.then(function(gl){
     var f=gl&&gl.files&&gl.files[0];if(f)cloudFid=f.id;
     return driveSave(tok,f?f.id:null,payload);
-  }).then(function(){localStorage.setItem(KEY+'_savedAt',String(Date.now()));setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}))})
-  .catch(function(e){if(e&&e.auth){authTip();return}setSync('err')});
+  }).then(function(){localStorage.removeItem(KEY+'_lastSyncErr');localStorage.setItem(KEY+'_savedAt',String(Date.now()));setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}))})
+  .catch(function(e){var m=(e&&e.auth)?'auth':String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_lastSyncErr',m);if(e&&e.auth){authTip();return}setSync('err')});
 }
 function queuePush(){
   if(!S.user||!S.user.tok||pulling)return;
@@ -2271,8 +2271,8 @@ function syncDiag(){
   b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?(esc(S.user.email)+'（已登入）'+((S.user&&S.user.tok)?'':'<br><b style="color:#C33">但登入通行證已過期 — 這就是不同步的原因，按「立即同步」會自動重登</b>')):'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
     +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店'
     +'<br>長期憑證：'+((S.user&&S.user.rtok)?'\u2705 已拿到（以後可自動續期）':'\u274c 還沒拿到 — 登入時要完整走完授權畫面')
-    +'<br>上次錯誤：'+(localStorage.getItem(KEY+'_loginErr')?esc(localStorage.getItem(KEY+'_loginErr')):'（無）');
-  if(!(S.user&&S.user.tok))return;
+    +'<br>上次登入錯誤：'+(localStorage.getItem(KEY+'_loginErr')?esc(localStorage.getItem(KEY+'_loginErr')):'（無）')+(localStorage.getItem(KEY+'_lastSyncErr')?'<br>上次同步錯誤：<b style="color:#C33">'+esc(localStorage.getItem(KEY+'_lastSyncErr'))+'</b>':'');
+  if(!(S.user&&S.user.tok)&&!(S.user&&S.user.rtok))return;if(!S.user.tok){tryRefresh().then(function(){ov.remove();syncDiag()}).catch(function(){b.innerHTML+='<br><b style="color:#C33">\u7e8c\u671f\u5931\u6557 — \u6309\u300c\u7acb\u5373\u540c\u6b65\u300d\u91cd\u65b0\u767b\u5165</b>'});return}
   gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+S.user.tok}})
   .then(function(r){return r.json()}).then(function(gl){
     var f=gl&&gl.files&&gl.files[0];
@@ -2318,6 +2318,12 @@ document.addEventListener('click',function(e){
 
 /* ---------- 啟動 ---------- */
 load();
+setTimeout(function(){
+  if(!(S.user&&S.user.email))return;
+  var go=function(tk){if(tk)syncPull(tk)};
+  if(S.user.tok)go(S.user.tok);
+  else if(S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
+},2000);
 enterApp();
 if(S.user&&S.user.tok)setTimeout(function(){try{syncPull(S.user.tok)}catch(e){}},400);
 else if(S.user&&S.user.email)setSync('err');
