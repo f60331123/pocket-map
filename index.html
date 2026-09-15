@@ -1590,9 +1590,10 @@ $('#ocrFile').addEventListener('change',function(){
 function openOcrCrop(dataUrl,onOk,onCancel){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   ov.innerHTML='<div class="ceCard" style="max-width:560px"><h4>\u2702\ufe0f \u6846\u9078\u8981\u6293\u7684\u6587\u5b57</h4>'
-    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u6846\u597d\u5f8c\u6309\u300c\u78ba\u8a8d\u6846\u9078\u300d\uff0c\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
     +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
-    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" class="primary" id="ocGo" disabled>\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
+    +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">\u6846\u9078\u5f8c\u6703\u51fa\u73fe\u300c\u78ba\u8a8d\u6846\u9078\u300d\uff0c\u6309\u4e0b\u53bb\u624d\u6703\u958b\u59cb\u64f7\u53d6\u3002</div>'
+    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" id="ocConfirm" class="primary" disabled>\u78ba\u8a8d\u6846\u9078</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
   document.body.appendChild(ov);
   var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap');
   var st=null,rect=null;
@@ -1616,8 +1617,8 @@ function openOcrCrop(dataUrl,onOk,onCancel){
   wrap.addEventListener('pointerup',endDrag);
   wrap.addEventListener('pointercancel',endDrag);
   ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
-  ov.querySelector('#ocFull').addEventListener('click',function(){ov.remove();onOk(dataUrl)});
-  okBtn.addEventListener('click',function(){if(!rect)return;go.click()});
+  ov.querySelector('#ocFull').addEventListener('click',function(){toast('已送出整張圖片，開始辨識');ov.remove();onOk(dataUrl)});
+  okBtn.addEventListener('click',function(){if(!rect)return;toast('已確認框選，開始擷取');go.click()});
   go.addEventListener('click',function(){
     if(!rect)return;
     var im=new Image();
@@ -2456,7 +2457,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v91';
+var APP_VER='v94';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2849,17 +2850,60 @@ function wsSwitch(code,cb){
 }
 function wsRooms(){try{return JSON.parse(localStorage.getItem(KEY+'_wsr')||'[]')}catch(e){return []}}
 function wsSaveRooms(a){localStorage.setItem(KEY+'_wsr',JSON.stringify(a))}
-function wsQuickAdd(){
-  if(!AUTH.user){toast('先登入才能建立共用地圖（選單 → 登入）');return}
+function wsCreateRoomFlow(onDone){
   var rooms=wsRooms();
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
   var code=fbNewCode(8);
   rooms.push({code:code});wsSaveRooms(rooms);
   FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
-    wsSwitch(code,function(){toast('✓ 已建立（'+rooms.length+'/5）— 邀請碼：'+code);wsNamePrompt(code)});
+    wsSwitch(code,function(){
+      wsNamePrompt(code,function(){
+        if(onDone)onDone();
+        toast('共用地圖已建立，名字跟邀請碼都幫你準備好了');
+      });
+    });
   }).catch(function(e){
     toast('已加入清單，但雲端開房失敗：'+((e&&e.message)||e)+' — 若寫 permission denied，要去 Firebase 控制台更新資料庫規則');
   });
+}
+function wsJoinPrompt(onDone){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard"><h4>加入朋友的共用地圖</h4>'
+    +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">把朋友給你的 8 碼邀請碼貼在下面。加入後，你自己的地圖還在，上面會多一張可以一起編輯的地圖。</div>'
+    +'<input class="txt" id="wsJoinCode" maxlength="8" placeholder="輸入 8 碼邀請碼" style="width:100%;margin-top:10px;font-size:16px;text-transform:uppercase">'
+    +'<div class="ceBtns"><button type="button" id="wsJoinCancel">取消</button><button type="button" class="primary" id="wsJoinOk">加入這張地圖</button></div></div>';
+  document.body.appendChild(ov);
+  var inp=document.getElementById('wsJoinCode');
+  inp.focus();
+  document.getElementById('wsJoinCancel').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
+  ov.addEventListener('click',function(e){if(e.target===ov){ov.remove();if(onDone)onDone()}});
+  document.getElementById('wsJoinOk').addEventListener('click',function(){
+    var code=(inp.value||'').trim().toUpperCase();
+    if(code.length<8){toast('邀請碼是 8 碼 — 跟朋友再確認一下');return}
+    if(wsRooms().some(function(r){return r.code===code})){toast('你已經有這個共用地圖了');return}
+    var rooms=wsRooms();
+    if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
+    rooms.push({code:code});wsSaveRooms(rooms);
+    ov.remove();
+    wsSwitch(code,function(){wsNamePrompt(code,function(){if(onDone)onDone();toast('已加入這張共用地圖')})});
+  });
+}
+function wsQuickAdd(onDone){
+  if(!AUTH.user){toast('先登入才能建立共用地圖（選單 → 登入）');return}
+  var rooms=wsRooms();
+  if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard"><h4>新增 / 加入共用地圖</h4>'
+    +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">你可以自己創一張新的共用地圖，或輸入朋友給你的邀請碼加入。每一張共用地圖都會自動生一組隨機 8 碼邀請碼，不用自己想代碼。</div>'
+    +'<div style="display:grid;gap:8px;margin-top:10px">'
+    +'<button type="button" class="suggRow" id="wsMakeMine" style="justify-content:flex-start"><span>✨</span><span style="text-align:left"><b>自己創一張</b><br><small style="color:var(--ink2)">建立後立刻可以改名字，再把邀請碼傳給朋友</small></span></button>'
+    +'<button type="button" class="suggRow" id="wsUseFriend" style="justify-content:flex-start"><span>🤝</span><span style="text-align:left"><b>加入朋友的</b><br><small style="color:var(--ink2)">貼上朋友給你的 8 碼邀請碼</small></span></button>'
+    +'</div><div class="ceBtns"><button type="button" id="wsAddCancel">取消</button></div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('wsAddCancel').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
+  ov.addEventListener('click',function(e){if(e.target===ov){ov.remove();if(onDone)onDone()}});
+  document.getElementById('wsMakeMine').addEventListener('click',function(){ov.remove();wsCreateRoomFlow(onDone)});
+  document.getElementById('wsUseFriend').addEventListener('click',function(){ov.remove();wsJoinPrompt(onDone)});
 }
 function wsNamePrompt(code,onDone){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
@@ -2887,7 +2931,7 @@ function sharedUI(){
     var h='<div class="ceCard"><h4>共用地圖</h4>';
     h+='<div style="text-align:left"><button type="button" class="suggRow" id="wsMe" style="width:100%;justify-content:flex-start'+(S.sharedRoom?';opacity:.75':';outline:2px solid #7B9E6B')+'"><span>🏠</span><span style="text-align:left"><b>個人地圖'+(S.sharedRoom?'':'（使用中）')+'</b><br><small style="color:var(--ink2)">只有你看得到的那份</small></span></button></div>';
     h+='<div style="max-height:38vh;overflow:auto;text-align:left;margin-top:8px">';
-    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:6px 0">還沒有共用地圖 — 下面可以建立（初始送你一個）或用朋友的邀請碼加入</div>';
+    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:6px 0">還沒有共用地圖 — 按下面「新增 / 加入共用地圖」就可以自己創一張，或輸入朋友給你的邀請碼加入</div>';
     rooms.forEach(function(rm,i){
       var cur=S.sharedRoom===rm.code;
       var nm=(rm.name&&rm.name.trim())?rm.name.trim():('共用地圖 '+(i+1));
@@ -2895,15 +2939,20 @@ function sharedUI(){
       h+='<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>👥</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?' ✅':'')+' '+escAttr(rm.code)+'</small></span></button><button type="button" class="danger" data-wsdel="'+i+'" style="padding:8px 12px">刪</button></div>';
     });
     h+='</div>';
+    if(S.sharedRoom){
+      h+='<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:8px">目前這張共用地圖的邀請碼：</div>'
+        +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="wsCurCode" value="'+escAttr(S.sharedRoom)+'" readonly style="flex:1;font-weight:900;letter-spacing:2px;text-transform:uppercase"><button type="button" id="wsCurCopy">複製</button></div>';
+    }
     if(rooms.length<5){
-      h+='<div style="display:flex;gap:6px;margin-top:10px"><input class="txt" id="wsJoin" placeholder="貼上朋友的 8 碼邀請碼" style="flex:1;text-transform:uppercase"><button type="button" id="wsJoinBtn">加入</button></div>'
-        +'<div class="ceBtns"><button type="button" class="primary" id="wsNew">建立新的共用地圖（'+rooms.length+'/5）</button><button type="button" id="wsClose">關閉</button></div>';
+      h+='<div class="ceBtns"><button type="button" class="primary" id="wsAddShared">新增 / 加入共用地圖（'+rooms.length+'/5）</button><button type="button" id="wsClose">關閉</button></div>';
     }else{
       h+='<div style="font-size:12px;color:#8A8674;margin-top:8px;text-align:center">已達上限 5 個 — 刪掉一個才能再加</div><div class="ceBtns"><button type="button" id="wsClose">關閉</button></div>';
     }
-    h+='<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">建立後把邀請碼（8 碼）傳給對方，他在這裡按「加入」— 之後雙方加的店、改的內容都即時同步。你的個人地圖永遠完好，切來切去不會亂。</div></div>';
+    h+='<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">上面會同時列出你的個人地圖和你跟朋友一起用的地圖。建立新的會自動生一組隨機 8 碼邀請碼；朋友按「新增 / 加入共用地圖」再選「加入朋友的」就能綁到同一張地圖。</div></div>';
     ov.innerHTML=h;
     document.getElementById('wsClose').addEventListener('click',function(){ov.remove()});
+    var ccb=document.getElementById('wsCurCopy');
+    if(ccb)ccb.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(S.sharedRoom).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
     document.getElementById('wsMe').addEventListener('click',function(){if(!S.sharedRoom){toast('現在就是在你的個人地圖');return}wsSwitch('',function(){render()})});
     ov.querySelectorAll('[data-ws]').forEach(function(b){b.addEventListener('click',function(){var c=b.dataset.ws;if(S.sharedRoom===c){toast('已經在使用這個共用地圖');return}wsSwitch(c,function(){render()})})});
     ov.querySelectorAll('[data-wsdel]').forEach(function(b){b.addEventListener('click',function(){
@@ -2912,22 +2961,8 @@ function sharedUI(){
       if(S.sharedRoom===rm.code){wsSwitch('',function(){render();toast('已刪除共用地圖，切回個人地圖')})}
       else{render();toast('已從清單移除（雲端資料保留，重新加入邀請碼就回來）')}
     })});
-    var jb=document.getElementById('wsJoinBtn');
-    if(jb)jb.addEventListener('click',function(){
-      var code=(document.getElementById('wsJoin').value||'').trim().toUpperCase();
-      if(code.length<8){toast('邀請碼是 8 碼 — 跟朋友再確認一下');return}
-      if(wsRooms().some(function(r){return r.code===code})){toast('你已經有這個共用地圖了');return}
-      var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);
-      wsSwitch(code,function(){render();wsNamePrompt(code)});
-    });
-    var nb=document.getElementById('wsNew');
-    if(nb)nb.addEventListener('click',function(){
-      var code=fbNewCode(8);
-      var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);render();
-      FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
-        wsSwitch(code,function(){render();wsNamePrompt(code)});
-      }).catch(function(e){toast('已加入清單，但雲端開房失敗：'+((e&&e.message)||e))});
-    });
+    var ab=document.getElementById('wsAddShared');
+    if(ab)ab.addEventListener('click',function(){ov.remove();wsQuickAdd(function(){sharedUI()})});
   }
   render();document.body.appendChild(ov);
 }
