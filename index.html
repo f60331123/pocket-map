@@ -651,6 +651,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
 .pinwrap{background:none;border:none}
@@ -2356,14 +2357,14 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u8a2d\u5b9a\uff08Firebase\uff09</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\U0001F464 \u5e33\u865f\u8207\u540c\u6b65\uff08\u767b\u5165\u4fe1\u7bb1\uff09\u2026</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
   document.querySelector('#mSyncDiag').addEventListener('click',function(){m.remove();syncDiag()});
-  document.querySelector('#mFb').addEventListener('click',function(){m.remove();fbSetup()});
+  document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
 });
@@ -2422,7 +2423,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v75';
+var APP_VER='v76';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2461,23 +2462,76 @@ function fbInit(){
   try{
     var c=JSON.parse(raw);
     if(!c||!c.databaseURL)return false;
-    firebase.initializeApp(c);
-    FB.db=firebase.database();FB.code=fbCode();FB.ready=!!FB.code;
-    return FB.ready;
+    if(!firebase.apps.length)firebase.initializeApp(c);
+    FB.db=firebase.database();
+    return true;
   }catch(e){return false}
 }
-function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
-/* v75：每個人打開網頁就自動擁有自己的私密代碼 — 朋友用自己的，互不相干；
-   舊用戶（還在用公開預設代碼、本機有資料、雲端公開房間也有資料＝可能多裝置）先不動，走手機設定換代碼 */
-function ensurePrivateCode(cb){
-  if(localStorage.getItem(KEY+'_fbcode')){cb();return}
-  var finish=function(){localStorage.setItem(KEY+'_fbcode',fbNewCode(8));cb()};
-  if(!(S.pins&&S.pins.length)){finish();return}
-  fetch((fbCfgRaw()?JSON.parse(fbCfgRaw()).databaseURL:DEFAULT_FB.databaseURL)+'/rooms/'+DEFAULT_FBCODE+'.json?shallow=true').then(function(r){return r.json()}).then(function(d){
-    if(d&&Object.keys(d).length){cb()}/*舊多裝置用戶：保持原代碼，由設定頁引導換私密*/
-    else finish();
-  }).catch(function(){finish()});
+/* v76：帳號同步 — 登入誰的信箱，雲端資料就是誰的（users/uid 只有本人讀得到） */
+var AUTH={user:null};
+function authStart(){
+  if(!window.firebase||!firebase.auth)return;
+  firebase.auth().onAuthStateChanged(function(u){
+    AUTH.user=u;
+    renderAcctUI();
+    if(u){
+      FB.path='users/'+u.uid;FB.code=u.email;FB.ready=true;FB.lastPushed='';FB.lastT=0;
+      fbStart();
+      toast('✉️ 已用 '+u.email+' 登入 — 這是專屬於你的口袋地圖');
+    }else{
+      FB.ready=false;FB.path='';
+      setTimeout(function(){toast('🔐 尚未登入 — 這台的地圖只存在本機，選單裡「帳號與同步」登入後才會雲端同步')},1800);
+    }
+  });
 }
+function acctUI(){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var u=AUTH.user;
+  ov.innerHTML='<div class="ceCard"><h4>\U0001F464 帳號與同步</h4>'
+    +(u
+      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">雲端正在同步到「只有你能讀寫」的私人空間。朋友的帳號就算打開同一個網頁，也看不到你的清單。</span></div>'
+      :'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">登入你的信箱後，這份口袋地圖就完全屬於你——換手機登同一個信箱，資料自動回來。朋友也用自己的信箱登入，就是他自己的地圖，互不相干。</div>'
+        +'<div style="margin-top:8px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">信箱</div><input class="txt" id="acEmail" type="email" placeholder="you@example.com" style="width:100%"></div>'
+        +'<div style="margin-top:6px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">密碼（至少 6 碼）</div><input class="txt" id="acPass" type="password" placeholder="第一次填 = 直接註冊" style="width:100%"></div>'
+        +'<div class="ceBtns"><button type="button" id="acReset" style="font-size:12px">忘記密碼</button><button type="button" id="acCancel">取消</button><button type="button" class="primary" id="acGo">登入 / 註冊</button></div>'
+        +'<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">同一組信箱密碼，幾台裝置登入都會同步。第一次填的信箱密碼就是註冊。</div>')
+    +(u?'<div class="ceBtns"><button type="button" id="acOut" class="danger">登出這台裝置</button></div>':'')
+    +'</div>';
+  document.body.appendChild(ov);
+  document.getElementById('acCancel').addEventListener('click',function(){ov.remove()});
+  if(u){document.getElementById('acOut').addEventListener('click',function(){
+    firebase.auth().signOut().then(function(){ov.remove();toast('已登出 — 資料還在這台裝置本機')});
+  });return}
+  document.getElementById('acGo').addEventListener('click',function(){
+    var em=document.getElementById('acEmail').value.trim(),pw=document.getElementById('acPass').value;
+    if(!/^\S+@\S+\.\S+$/.test(em)){toast('信箱格式不對');return}
+    if(pw.length<6){toast('密碼至少 6 碼');return}
+    var btn=this;btn.disabled=true;btn.textContent='連線中…';
+    firebase.auth().signInWithEmailAndPassword(em,pw).then(function(){ov.remove()}).catch(function(e){
+      var code=(e&&e.code)||'';
+      if(code.indexOf('user-not-found')>=0||code.indexOf('invalid-credential')>=0||code.indexOf('wrong-password')>=0||code.indexOf('invalid-login-credentials')>=0){
+        firebase.auth().createUserWithEmailAndPassword(em,pw).then(function(){ov.remove()}).catch(function(e2){
+          btn.disabled=false;btn.textContent='登入 / 註冊';
+          toast('註冊失敗：'+((e2&&e2.message)||'未知錯誤'));
+        });
+      }else if(code.indexOf('invalid-email')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('信箱格式不對')}
+      else if(code.indexOf('too-many-requests')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('嘗試太多次，等一下再試')}
+      else if(code.indexOf('email-already-in-use')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('這個信箱已註冊過 — 密碼打原本那組，或按「忘記密碼」')}
+      else if(code.indexOf('operation-not-allowed')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('雲端還沒開啟「Email 登入」— Firebase 控制台 → Authentication → Sign-in method → 啟用電子郵件/密碼')}
+      else if(code.indexOf('network')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('連不上登入服務，檢查網路')}
+      else{btn.disabled=false;btn.textContent='登入 / 註冊';toast('登入失敗：'+((e&&e.message)||'未知錯誤'))}
+    });
+  });
+  document.getElementById('acReset').addEventListener('click',function(){
+    var em=document.getElementById('acEmail').value.trim();
+    if(!/^\S+@\S+\.\S+$/.test(em)){toast('先填信箱再按忘記密碼');return}
+    firebase.auth().sendPasswordResetEmail(em).then(function(){toast('重設密碼的信寄出了 — 去信箱收信')}).catch(function(){toast('寄送失敗 — 這個信箱可能還沒註冊過')});
+  });
+}
+function renderAcctUI(){
+  var r=document.querySelector('#mAcct');if(r)r.textContent=AUTH.user?('\U0001F464 帳號：'+AUTH.user.email):'\U0001F464 登入 / 註冊（帳號同步）';
+}
+function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPush(){
   if(!FB.ready||FB.applying)return;
   var d=stateData();delete d.user;
@@ -2485,7 +2539,7 @@ function fbPush(){
   if(j===FB.lastPushed)return;
   FB.lastPushed=j;
   d._t=Date.now();FB.lastT=d._t;
-  FB.db.ref('rooms/'+FB.code).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
+  FB.db.ref(FB.path).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
 }
 /* v67：雲端為準，整包套用 — 刪除、改名、顏色、分類增減全部同步 */
 function fbApply(d,silent){
@@ -2518,7 +2572,7 @@ function fbApply(d,silent){
 }
 function fbListen(){
   if(!FB.ready)return;
-  FB.db.ref('rooms/'+FB.code).on('value',function(s){
+  FB.db.ref(FB.path).on('value',function(s){
     var d=s.val();if(!d||FB.applying)return;
     if(d._t&&FB.lastT&&d._t<=FB.lastT)return;
     var j=JSON.stringify((function(){var x=JSON.parse(JSON.stringify(d));delete x._t;delete x.user;return x})());
@@ -2528,7 +2582,7 @@ function fbListen(){
 }
 function fbStart(){
   if(!FB.ready)return;
-  FB.db.ref('rooms/'+FB.code).once('value').then(function(s){
+  FB.db.ref(FB.path).once('value').then(function(s){
     var d=s.val();
     if(d){
       var ct=+(d._t||0);var cids={};(d.pins||[]).forEach(function(p){cids[p.id]=1});
@@ -2599,18 +2653,10 @@ function pinImportFromHash(){
 
 /* ---------- 啟動 ---------- */
 load();
-ensurePrivateCode(function(){
-  if(fbInit()){
-    fbStart();
-    toast(FB.code===DEFAULT_FBCODE?('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff09\u26a0\ufe0f \u516c\u958b\u4ee3\u78bc\uff0c\u5efa\u8b70\u9078\u55ae\u2192\u96f2\u7aef\u540c\u6b65\u8a2d\u5b9a\u63db\u79c1\u5bc6\u4ee3\u78bc'):('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff0c\u79c1\u5bc6\u4ee3\u78bc '+FB.code+'\uff09'));
-    /* 已換私密代碼的舊用戶：把公開的舊房間清乾淨（只做一次） */
-    if(FB.code!==DEFAULT_FBCODE&&!localStorage.getItem(KEY+'_fbclean')){
-      try{FB.db.ref('rooms/'+DEFAULT_FBCODE).remove();localStorage.setItem(KEY+'_fbclean','1')}catch(e){}
-    }
-  }
-  else{setTimeout(function(){toast('\u7248\u672c '+APP_VER+' \u2014 \u96f2\u7aef\u672a\u9023\u7dda\uff0c\u8acb\u56de\u5831\u52a9\u624b')},2000)}
-  pinImportFromHash();
-});
+if(fbInit()){
+  authStart();
+}else{setTimeout(function(){toast('\u7248\u672c '+APP_VER+' \u2014 \u96f2\u7aef\u672a\u9023\u7dda\uff0c\u8acb\u56de\u5831\u52a9\u624b')},2000)}
+pinImportFromHash();
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
