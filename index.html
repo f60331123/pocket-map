@@ -2150,16 +2150,19 @@ function doAuthRedirect(){authTip()}
 function loginRedirectFlow(){
   var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
   pkce().then(function(ch){
-    location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=code&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&access_type=offline&prompt=consent select_account&code_challenge='+ch+'&code_challenge_method=S256';
+    var ver=localStorage.getItem(KEY+'_pv')||'';
+    try{document.cookie=KEY+'_pv='+ver+';path=/;max-age=3600;SameSite=Lax'}catch(e){}
+    location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=code&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&access_type=offline&prompt=consent select_account&code_challenge='+ch+'&code_challenge_method=S256&state='+encodeURIComponent(ver);
   });
 }
-function finishLoginCode(code){
+function finishLoginCode(code,stVer){
   var cid=cidGet();
-  var ver=localStorage.getItem(KEY+'_pv');localStorage.removeItem(KEY+'_pv');
+  var ver=stVer||localStorage.getItem(KEY+'_pv')||'';
+  try{var m=document.cookie.match(new RegExp('(?:^|; )'+KEY+'_pv=([^;]*)'));if(!ver&&m)ver=m[1];localStorage.removeItem(KEY+'_pv');document.cookie=KEY+'_pv=;path=/;max-age=0'}catch(e){}
   setSync('syncing');
   fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)+'&client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&grant_type=authorization_code'+(ver?'&code_verifier='+encodeURIComponent(ver):'')})
   .then(function(r){return r.json()}).then(function(t){
-    if(!t||!t.access_token)throw new Error((t&&t.error)||'notok');
+    if(!t||!t.access_token)throw new Error((t&&t.error?t.error+(t.error_description?' — '+t.error_description:''):'notok'));
     return gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+t.access_token}}).then(function(r){return r.json()}).then(function(u){
       S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'\u4f7f\u7528\u8005',email:(u&&u.email)||'',tok:t.access_token,rtok:t.refresh_token||(S.user&&S.user.rtok)||'',real:1};
       $('#avatarBtn').textContent=S.user.name.charAt(0);
@@ -2234,10 +2237,10 @@ $('#avatarBtn').addEventListener('click',function(){
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
-    :'<button id="mLogin">登入 Google（開啟雲端同步）</button><button id="mLogin2">登入 Google（相容模式—彈窗空白時用這個）</button>')
+    :'<button id="mLogin">登入 Google</button>')
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
-  var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginGoogle()});var lg2=document.querySelector('#mLogin2');if(lg2)lg2.addEventListener('click',function(){m.remove();loginRedirectFlow()});
+  var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
@@ -2308,7 +2311,7 @@ else if(S.user&&S.user.email)setSync('err');
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.user&&S.user.tok&&!pulling)setTimeout(function(){try{syncPull(S.user.tok)}catch(e){}},300)});
 
 if(S.user&&S.user.real)setSync('local');
-(function(){try{var q=new URLSearchParams(location.search);var cd=q.get('code');if(cd){history.replaceState(null,'',location.pathname);finishLoginCode(cd);return}}catch(e){}})();
+(function(){try{var q=new URLSearchParams(location.search);var cd=q.get('code');if(cd){var st=q.get('state')||'';history.replaceState(null,'',location.pathname);finishLoginCode(cd,st);return}}catch(e){}})();
 (function(){var h=location.hash||'';
 if(h.indexOf('access_token=')>=0){var m=h.match(/access_token=([^&]+)/);history.replaceState(null,'',location.pathname+location.search);if(m)finishLogin(decodeURIComponent(m[1]).replace(/\+/g,' '))}
 else if(h.indexOf('error=')>=0){history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){toast('Google 登入取消')},600)}
