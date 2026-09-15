@@ -2431,7 +2431,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v83';
+var APP_VER='v84';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2511,10 +2511,11 @@ function acctUI(){
         +'<div style="font-size:11.5px;color:#8A8674;margin:8px 0 2px;text-align:center">— 或用信箱密碼 —</div>'
         +'<div class="ceBtns"><button type="button" id="acReset" style="font-size:12px">忘記密碼</button><button type="button" id="acCancel">取消</button><button type="button" class="primary" id="acGo">登入 / 註冊</button></div>'
         +'<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">同一組信箱密碼，幾台裝置登入都會同步。第一次填的信箱密碼就是註冊。</div>')
-    +(u?'<div class="ceBtns"><button type="button" id="acOut" class="danger">登出這台裝置</button></div>':'')
+    +(u?'<div class="ceBtns"><button type="button" id="acClose2">關閉</button><button type="button" id="acOut" class="danger">登出這台裝置</button></div>':'')
     +'</div>';
   document.body.appendChild(ov);
-  document.getElementById('acCancel').addEventListener('click',function(){ov.remove()});
+  var cc=document.getElementById('acCancel');if(cc)cc.addEventListener('click',function(){ov.remove()});
+  var cc2=document.getElementById('acClose2');if(cc2)cc2.addEventListener('click',function(){ov.remove()});
   ov.querySelectorAll('[data-avc]').forEach(function(b){b.addEventListener('click',function(){
     localStorage.setItem(KEY+'_avc',b.dataset.avc);localStorage.removeItem(KEY+'_avi');
     renderAvatar();toast('頭像換色完成 ✨');setTimeout(function(){ov.remove();acctUI()},250);
@@ -2543,7 +2544,8 @@ function acctUI(){
   var air=document.getElementById('avImgRm');
   if(air)air.addEventListener('click',function(){localStorage.removeItem(KEY+'_avi');renderAvatar();toast('已移除圖片，改用顏色頭像');setTimeout(function(){ov.remove();acctUI()},250)});
   if(u){document.getElementById('acOut').addEventListener('click',function(){
-    firebase.auth().signOut().then(function(){ov.remove();toast('已登出 — 資料還在這台裝置本機')});
+    var btn=this;btn.disabled=true;btn.textContent='登出中…';
+    firebase.auth().signOut().then(function(){ov.remove();renderAcctUI();toast('已登出 — 資料還在這台裝置本機')}).catch(function(e){btn.disabled=false;btn.textContent='登出這台裝置';toast('登出失敗：'+((e&&e.message)||'未知錯誤'))});
   });return}
   document.getElementById('acGo').addEventListener('click',function(){
     var em=document.getElementById('acEmail').value.trim(),pw=document.getElementById('acPass').value;
