@@ -702,9 +702,9 @@ function hslToHex(h,s,l){s/=100;l/=100;var k=function(n){return (n+h/30)%12},a=s
 function normHex(c){if(c&&c.charAt(0)==='#')return c;var m=String(c).match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);return m?hslToHex(+m[1],+m[2],+m[3]):'#888888'}
 function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+ch.codePointAt(0))%360});return 'hsl('+h+',42%,44%)'}
 function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.user)S.user=d.user;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
-function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}if(!S.trash)S.trash={}}
+function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}if(!S.trash)S.trash={};S.sharedRoom=localStorage.getItem(KEY+'_ws')||'';S.shareView=localStorage.getItem(KEY+'_sv')==='1'}
 function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,user:S.user,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{}}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}if(typeof queuePush==='function')queuePush();if(!FB.applying&&typeof fbPush==='function'&&FB.ready)fbPush()}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()));localStorage.setItem(KEY+'_ws',S.sharedRoom||'');localStorage.setItem(KEY+'_sv',S.shareView?'1':'0')}catch(e){}if(typeof queuePush==='function')queuePush();if(!FB.applying&&typeof fbPush==='function'&&FB.ready)fbPush()}
 if(!Array.isArray(S.folders))S.folders=[];
 function hostOf(u){try{return new URL(u).hostname}catch(e){return u}}
 
@@ -2357,7 +2357,7 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\U0001F464 \u5e33\u865f\u8207\u540c\u6b65\uff08\u767b\u5165\u4fe1\u7bb1\uff09\u2026</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\U0001F464 \u5e33\u865f\u8207\u540c\u6b65\uff08\u767b\u5165\u4fe1\u7bb1\uff09\u2026</button><button id="mExplore">🌐 公開探索（大家的推薦）</button><button id="mViewLink">🔗 給朋友看的網址（唯讀）</button><button id="mShared">👥 共用地圖（一起編輯）</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
@@ -2365,6 +2365,9 @@ $('#avatarBtn').addEventListener('click',function(){
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
   document.querySelector('#mSyncDiag').addEventListener('click',function(){m.remove();syncDiag()});
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
+  document.querySelector('#mExplore').addEventListener('click',function(){m.remove();exploreUI()});
+  document.querySelector('#mViewLink').addEventListener('click',function(){m.remove();viewLinkUI()});
+  document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
 });
@@ -2423,7 +2426,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v76';
+var APP_VER='v77';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2532,14 +2535,25 @@ function renderAcctUI(){
   var r=document.querySelector('#mAcct');if(r)r.textContent=AUTH.user?('\U0001F464 帳號：'+AUTH.user.email):'\U0001F464 登入 / 註冊（帳號同步）';
 }
 function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
+function fbPath(){return (AUTH.user&&S.sharedRoom)?('shared/'+S.sharedRoom):('users/'+AUTH.user.uid)}
+function fbPushForce(){FB.lastPushed='';if(FB.ready)fbPush()}
 function fbPush(){
-  if(!FB.ready||FB.applying)return;
+  if(!FB.ready||!AUTH.user||FB.applying)return;
   var d=stateData();delete d.user;
   var j=JSON.stringify(d);
   if(j===FB.lastPushed)return;
   FB.lastPushed=j;
   d._t=Date.now();FB.lastT=d._t;
-  FB.db.ref(FB.path).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
+  var uid=AUTH.user.uid;
+  /* 共用房間用 update（不能覆蓋掉 members 名單）；個人空間一樣 update 安全 */
+  FB.db.ref(fbPath()).update(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
+  if(!S.sharedRoom){
+    var pub={},has=false;
+    (S.pins||[]).forEach(function(pp){if(pp.pub){has=true;pub[pp.id]={name:pp.name||'',addr:pp.addr||'',lat:pp.lat,lng:pp.lng,cat:pp.cat,note:pp.note||'',u:pp.updated||0}}});
+    if(has)pub.e=AUTH.user.email||'';
+    FB.db.ref('pub/'+uid).set(has?pub:null);
+    if(S.shareView)FB.db.ref('view/'+uid).set(d);
+  }
 }
 /* v67：雲端為準，整包套用 — 刪除、改名、顏色、分類增減全部同步 */
 function fbApply(d,silent){
@@ -2571,8 +2585,10 @@ function fbApply(d,silent){
   setTimeout(function(){if(FB.ready)fbPush()},500);
 }
 function fbListen(){
-  if(!FB.ready)return;
-  FB.db.ref(FB.path).on('value',function(s){
+  if(!FB.ready||!AUTH.user)return;
+  if(FB.ref)FB.ref.off();
+  FB.ref=FB.db.ref(fbPath());
+  FB.ref.on('value',function(s){
     var d=s.val();if(!d||FB.applying)return;
     if(d._t&&FB.lastT&&d._t<=FB.lastT)return;
     var j=JSON.stringify((function(){var x=JSON.parse(JSON.stringify(d));delete x._t;delete x.user;return x})());
@@ -2581,8 +2597,8 @@ function fbListen(){
   },function(e){toast('雲端連線失敗：'+(e&&e.message||e))});
 }
 function fbStart(){
-  if(!FB.ready)return;
-  FB.db.ref(FB.path).once('value').then(function(s){
+  if(!FB.ready||!AUTH.user)return;
+  FB.db.ref(fbPath()).once('value').then(function(s){
     var d=s.val();
     if(d){
       var ct=+(d._t||0);var cids={};(d.pins||[]).forEach(function(p){cids[p.id]=1});
@@ -2634,7 +2650,123 @@ $('#sharePinBtn').addEventListener('click',function(){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,function(){window.prompt('複製失敗 — 請長按全選以下文字手動複製：',txt)});
   else window.prompt('複製失敗 — 請長按全選以下文字手動複製：',txt);
 });
+/* ---------- v77：公開探索 / 唯讀網址 / 共用地圖 ---------- */
+function fbRest(path){return fetch(DEFAULT_FB.databaseURL+path+'.json')}
+function importPrefill(pp){
+  openPin(null);
+  if(pp.name)$('#fName').value=pp.name;
+  if(pp.addr)$('#fAddr').value=cleanAddr(pp.addr);
+  if(pp.lat!=null&&pp.lng!=null)S.draft={lat:+pp.lat,lng:+pp.lng};
+  if(pp.note)$('#fNote').value=pp.note;
+  if(pp.cat){S.draftCat=pp.cat;renderCatChips(pp.cat)}
+  updateCoordTxt();
+  toast('已幫你填好 — 確認後按「釘起來」收進你的地圖');
+}
+function pubRowHtml(i,pp){return '<button type="button" class="suggRow" data-i="'+i+'"><span>📍</span><span style="text-align:left;min-width:0"><b>'+esc(pp.name||'（未命名）')+'</b><br><small style="color:var(--ink2)">'+esc(cleanAddr(pp.addr||''))+'</small></span></button>'}
+function showViewer(uid){
+  fbRest('/view/'+uid).then(function(r){return r.json()}).then(function(d){
+    if(!d||!Array.isArray(d.pins)||!d.pins.length){toast('這個分享網址沒有內容，或對方已關閉分享');return}
+    var ov=document.createElement('div');ov.id='chipEditOverlay';
+    var h='<div class="ceCard"><h4>👀 朋友的口袋地圖（唯讀）</h4><div style="max-height:50vh;overflow:auto;text-align:left">';
+    d.pins.forEach(function(pp,i){h+=pubRowHtml(i,pp)});
+    h+='</div><div style="font-size:11.5px;color:#8A8674;margin-top:8px">點一間店可以收進自己的地圖 — 對方的清單不會被改動</div><div class="ceBtns"><button type="button" id="vwClose">關閉</button></div></div>';
+    ov.innerHTML=h;document.body.appendChild(ov);
+    document.getElementById('vwClose').addEventListener('click',function(){ov.remove()});
+    ov.querySelectorAll('.suggRow').forEach(function(b){b.addEventListener('click',function(){ov.remove();importPrefill(d.pins[+b.dataset.i]||{})})});
+  }).catch(function(){toast('讀取分享內容失敗，稍後再試')});
+}
+function exploreUI(){
+  fbRest('/pub').then(function(r){return r.json()}).then(function(all){
+    if(!all){toast('公開區還空空的 — 把店設「公開」後會出現在這裡');return}
+    var items=[];
+    var ov=document.createElement('div');ov.id='chipEditOverlay';
+    var h='<div class="ceCard"><h4>🌐 公開探索 — 大家公開推薦的店</h4><div style="max-height:55vh;overflow:auto;text-align:left">';
+    Object.keys(all).forEach(function(uid){
+      var u=all[uid];if(!u)return;
+      var arr=u.pins||{};var ids=Object.keys(arr);
+      if(!ids.length)return;
+      h+='<div style="font-size:12px;color:var(--ink2);margin:10px 0 4px">👤 '+esc((u.e||'').split('@')[0]||'一位朋友')+' 的公開推薦</div>';
+      ids.forEach(function(k){items.push(arr[k]);h+=pubRowHtml(items.length-1,arr[k])});
+    });
+    if(!items.length){h+='<div style="font-size:12.5px;color:var(--ink2);padding:10px 0">還沒有公開的店 — 你可以把編輯頁的「公開」打勾試試</div>'}
+    h+='</div><div style="font-size:11.5px;color:#8A8674;margin-top:8px">點一間店收進自己的地圖</div><div class="ceBtns"><button type="button" id="exClose">關閉</button></div></div>';
+    ov.innerHTML=h;document.body.appendChild(ov);
+    document.getElementById('exClose').addEventListener('click',function(){ov.remove()});
+    ov.querySelectorAll('.suggRow').forEach(function(b){b.addEventListener('click',function(){ov.remove();importPrefill(items[+b.dataset.i]||{})})});
+  }).catch(function(){toast('讀取公開探索失敗，稍後再試')});
+}
+function viewLinkUI(){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var on=!!S.shareView;
+  var link=location.href.split('#')[0]+'#view='+(AUTH.user?AUTH.user.uid:'');
+  ov.innerHTML='<div class="ceCard"><h4>🔗 給朋友看的網址（唯讀）</h4>'
+    +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">'+(on?'✅ <b>開啟中</b> — 拿到網址的人看得到你全部的店（只能看，不能改）。關閉後網址立刻失效。':'目前關閉中。開啟後產生一條網址，朋友打開就能瀏覽你的清單（唯讀）。')+'</div>'
+    +(on?'<textarea class="txt" rows="3" readonly style="width:100%;font-size:12px;margin-top:8px">'+escAttr(link)+'</textarea>':'')
+    +'<div class="ceBtns">'+(on?'<button type="button" id="vlCopy">複製網址</button><button type="button" class="danger" id="vlOff">關閉分享</button>':'<button type="button" class="primary" id="vlOn">開啟唯讀分享</button>')+'<button type="button" id="vlCancel">關閉視窗</button></div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('vlCancel').addEventListener('click',function(){ov.remove()});
+  if(on){
+    document.getElementById('vlCopy').addEventListener('click',function(){
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(link).then(function(){toast('已複製 — 貼給朋友就行')},function(){toast('複製失敗，請手動選取')});
+    });
+    document.getElementById('vlOff').addEventListener('click',function(){
+      S.shareView=false;localStorage.setItem(KEY+'_sv','0');ov.remove();
+      if(AUTH.user)FB.db.ref('view/'+AUTH.user.uid).remove().catch(function(){});
+      toast('已關閉唯讀分享 — 舊網址立即失效');
+    });
+  }else{
+    document.getElementById('vlOn').addEventListener('click',function(){
+      S.shareView=true;localStorage.setItem(KEY+'_sv','1');ov.remove();fbPushForce();
+      toast('已開啟 — 再打開這個選單按「複製網址」');
+    });
+  }
+}
+function wsSwitch(code,cb){
+  if(!AUTH.user){toast('先登入信箱才可以用這個功能（選單 → 帳號與同步）');if(cb)cb();return}
+  var go=function(){
+    S.sharedRoom=code||'';localStorage.setItem(KEY+'_ws',S.sharedRoom);
+    if(FB.ref){FB.ref.off();FB.ref=null}
+    FB.db.ref(fbPath()).once('value').then(function(s){
+      var d=s.val();
+      if(d)fbApply(d,true);else fbPush();
+      renderAll();
+      toast(code?('👥 已切換到共用地圖（'+code+'）'):('🏠 已切回你的個人地圖'));
+      if(cb)cb();
+    }).catch(function(){fbPush();if(cb)cb()});
+  };
+  if(code)FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(go).catch(function(e){toast('加入共用地圖失敗：'+((e&&e.message)||e));if(cb)cb()});
+  else go();
+}
+function sharedUI(){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var h='<div class="ceCard"><h4>👥 共用地圖（一起編輯）</h4>';
+  if(S.sharedRoom){
+    h+='<div style="font-size:13px;line-height:1.8;text-align:left">目前共用中，邀請碼：<b>'+escAttr(S.sharedRoom)+'</b><br><span style="font-size:12px;color:var(--ink2)">成員加的店大家都看得到、都能改。你的個人地圖完好存在雲端，離開就切回來。</span></div>'
+      +'<div class="ceBtns"><button type="button" class="danger" id="shLeave">離開（切回個人地圖）</button><button type="button" id="shClose">關閉</button></div>';
+  }else{
+    h+='<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">和信任的人共用一份清單：建立後得到一組 8 碼邀請碼，對方在這裡輸入同一組碼就會加入（雙向同步、都能編輯）。你的個人地圖不受影響。</div>'
+      +'<div style="display:flex;gap:6px;margin-top:10px"><input class="txt" id="shCode" placeholder="輸入朋友的 8 碼邀請碼" style="flex:1;text-transform:uppercase"><button type="button" id="shJoin">加入</button></div>'
+      +'<div class="ceBtns"><button type="button" class="primary" id="shNew">建立共用地圖（產生邀請碼）</button><button type="button" id="shClose">關閉</button></div>';
+  }
+  h+='</div>';ov.innerHTML=h;document.body.appendChild(ov);
+  document.getElementById('shClose').addEventListener('click',function(){ov.remove()});
+  if(S.sharedRoom){
+    document.getElementById('shLeave').addEventListener('click',function(){wsSwitch('',function(){ov.remove()})});
+  }else{
+    document.getElementById('shNew').addEventListener('click',function(){
+      var code=fbNewCode(8);
+      wsSwitch(code,function(){toast('✓ 已建立 — 邀請碼：'+code+'（在這個視窗看得到）');setTimeout(function(){sharedUI()},600)});
+    });
+    document.getElementById('shJoin').addEventListener('click',function(){
+      var code=(document.getElementById('shCode').value||'').trim().toUpperCase();
+      if(code.length<8){toast('邀請碼是 8 碼 — 跟朋友再確認一下');return}
+      wsSwitch(code,function(){ov.remove()});
+    });
+  }
+}
 function pinImportFromHash(){
+  var mv=location.hash.match(/#view=([A-Za-z0-9]+)/);
+  if(mv){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}showViewer(mv[1]);return}
   var m=location.hash.match(/#add=([A-Za-z0-9\-_]+)/);if(!m)return;
   try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
   var j=null;try{j=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))))}catch(e){}
