@@ -2321,6 +2321,12 @@ load();
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
+  if(S.user&&S.user.tok)go(S.user.tok);
+  else if(S.user&&S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
+},2000);
+setTimeout(function(){
+  if(!(S.user&&S.user.email))return;
+  var go=function(tk){if(tk)syncPull(tk)};
   if(S.user.tok)go(S.user.tok);
   else if(S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
 },2000);
