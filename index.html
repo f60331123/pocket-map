@@ -619,9 +619,10 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <p style="font-size:14.5px;line-height:1.8;color:var(--ink2)">把連結傳給朋友，對方會看到一頁<b style="color:var(--ink)">唯讀地圖</b>：上面只有你設為「公開」的釘子，心得與分類一目瞭然。<br>（原型階段這是示意連結，真實版會真的生成公開頁面。）</p>
-    <div class="shareUrl" id="shareUrl">https://pocket-pins.app/u/你的地圖</div>
-    <button class="saveBtn" id="copyShare">複製連結</button>
+    <p style="font-size:14.5px;line-height:1.8;color:var(--ink2)">把連結傳給朋友，對方會看到一頁<b style="color:var(--ink)">唯讀地圖</b>。只有你設為「公開」的店會出現在這份分享地圖上。</p>
+    <div class="shareUrl" id="shareUrl">請先開啟分享</div>
+    <div class="ceBtns"><button type="button" class="primary" id="shareOn">開啟分享</button><button type="button" id="copyShare">複製連結</button></div>
+    <div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">分享開著時，別人打開網址就能看；你關閉分享後，舊網址會立即失效。</div>
   </div>
 </div>
 
@@ -1593,7 +1594,7 @@ function openOcrCrop(dataUrl,onOk,onCancel){
     +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
     +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" class="primary" id="ocGo" disabled>\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
   document.body.appendChild(ov);
-  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),wrap=ov.querySelector('#ocWrap');
+  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap');
   var st=null,rect=null;
   function pos(e){var r=img.getBoundingClientRect();return{x:Math.min(Math.max(0,(e.clientX-r.left)/r.width),1),y:Math.min(Math.max(0,(e.clientY-r.top)/r.height),1)}}
   function draw(){if(!rect)return;var r=img.getBoundingClientRect();sel.style.display='block';sel.style.left=(rect.x0*r.width)+'px';sel.style.top=(rect.y0*r.height)+'px';sel.style.width=((rect.x1-rect.x0)*r.width)+'px';sel.style.height=((rect.y1-rect.y0)*r.height)+'px'}
@@ -1607,15 +1608,16 @@ function openOcrCrop(dataUrl,onOk,onCancel){
     var p=pos(e);rect.x1=p.x;rect.y1=p.y;
     rect.x0=Math.min(st.ax,rect.x1);rect.x1=Math.max(st.ax,rect.x1);
     rect.y0=Math.min(st.ay,rect.y1);rect.y1=Math.max(st.ay,rect.y1);
-    draw();go.disabled=false;
+    draw();go.disabled=false;okBtn.disabled=false;
   });
   function endDrag(){if(!st)return;st=null;
-    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true}
+    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true;okBtn.disabled=true}
   }
   wrap.addEventListener('pointerup',endDrag);
   wrap.addEventListener('pointercancel',endDrag);
   ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
   ov.querySelector('#ocFull').addEventListener('click',function(){ov.remove();onOk(dataUrl)});
+  okBtn.addEventListener('click',function(){if(!rect)return;go.click()});
   go.addEventListener('click',function(){
     if(!rect)return;
     var im=new Image();
@@ -2172,12 +2174,28 @@ $('#fab').addEventListener('click',function(){openPin()});
 $('#pinClose').addEventListener('click',closePin);
 $$('.overlay').forEach(function(o){o.addEventListener('click',function(e){if(e.target===o){o.classList.add('hide');delArm=false}})});
 
-$('#shareBtn').addEventListener('click',function(){$('#shareOverlay').classList.remove('hide')});
+function refreshShareOverlay(){
+  var box=$('#shareUrl');if(!box)return;
+  var on=!!S.shareView&&!!(AUTH.user&&AUTH.user.uid);
+  var link=on?(location.href.split('#')[0]+'#view='+(AUTH.user?AUTH.user.uid:'')):'請先開啟分享';
+  box.textContent=link;
+  var onBtn=$('#shareOn'),cp=$('#copyShare');
+  if(onBtn)onBtn.textContent=on?'重新產生連結':'開啟分享';
+  if(cp)cp.disabled=!on;
+}
+$('#shareBtn').addEventListener('click',function(){refreshShareOverlay();$('#shareOverlay').classList.remove('hide')});
 $('#shareClose').addEventListener('click',function(){$('#shareOverlay').classList.add('hide')});
+$('#shareOn').addEventListener('click',function(){
+  if(!AUTH.user){toast('先用 Google 登入，才能分享你的地圖');return}
+  S.shareView=true;localStorage.setItem(KEY+'_sv','1');refreshShareOverlay();fbPushForce();toast('已開啟分享');
+});
 $('#copyShare').addEventListener('click',function(){
+  refreshShareOverlay();
+  var txt=$('#shareUrl').textContent;
+  if(!/^https?:\/\//.test(txt)){toast('先開啟分享，才會有網址');return}
   if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText($('#shareUrl').textContent).then(function(){toast('已複製連結（示範）')},function(){toast('複製失敗，請手動選取複製')});
-  }else toast('複製失敗，請手動選取複製');
+    navigator.clipboard.writeText(txt).then(function(){toast('已複製分享網址')},function(){toast('複製失敗，請手動選取複製')});
+  }else window.prompt('請手動複製：',txt);
 });
 
 /* ---------- 登入（示範） ---------- */
@@ -2208,10 +2226,8 @@ function setSync(st,extra){
   var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'訪客模式（資料只在這台裝置）',guest:'訪客模式（尚未登入）'}[st]||''}
   var r=document.querySelector('#mSyncRow');
   if(r){
-    var au=(typeof AUTH!=='undefined'&&AUTH.user)?AUTH.user:null;
-    var base=au?('已登入 '+(au.email||'')+(S.sharedRoom?'｜共用地圖 '+S.sharedRoom:'｜個人地圖')):(lastEmailGet()?('訪客模式｜上次帳號 '+lastEmailGet()):'訪客模式');
-    var tail=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'資料只在這台裝置',guest:'尚未登入',off:'未同步（僅本機）'})[st]||'';
-    r.textContent=base+(tail?('｜'+tail):'');
+    var tail=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'訪客模式',guest:'尚未登入',off:'未同步（僅本機）'})[st]||'';
+    r.textContent=tail;
   }
 }
 function loadGsi(cb){
@@ -2301,7 +2317,7 @@ function logoutGoogle(){
   var t=S.user&&S.user.tok;
   S.user=null;persist();
   try{if(t&&window.google&&google.accounts)google.accounts.oauth2.revoke(t,function(){})}catch(e){}
-  $('#avatarBtn').textContent='訪';renderAvatar();setSync('off');
+  renderAvatar();setSync('off');
   toast('已登出 — 釘點都還在本機，之後登入會自動同步');
 }
 var cloudFid=null,pulling=false,pushTimer=null;
@@ -2440,7 +2456,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v87';
+var APP_VER='v91';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2507,13 +2523,12 @@ function authStart(){
 }
 function acctUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
-  var u=AUTH.user,last=lastEmailGet();
+  var u=AUTH.user;
   ov.innerHTML='<div class="ceCard"><h4>'+(u?'帳號':'登入 Google')+'</h4>'
     +(u
-      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">這一頁關掉，或新開一頁時，會回到訪客模式；這台只記住上次登入帳號提示，不會自動登入。</span></div>'
-       +'<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:8px">目前位置：<b style="color:var(--ink)">'+(S.sharedRoom?('共用地圖 '+escAttr(S.sharedRoom)):'個人地圖')+'</b></div>'
+      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b></div>'
        +'<div class="ceBtns" style="margin-top:12px"><button type="button" id="acOut" class="danger" style="width:100%">登出</button><button type="button" id="acClose">關閉</button></div>'
-      :'<div style="font-size:12.5px;line-height:1.75;color:var(--ink2);text-align:left">目前是訪客模式。新開頁面不會自動登入；要同步分類、地圖和頭像時，再用 Google 登入。'+(last?'<br><span style="font-size:12px;color:var(--ink)">上次這台登入：<b>'+escAttr(last)+'</b>（只記提示，不會自動登入）</span>':'')+'</div>'
+      :'<div style="font-size:12.5px;line-height:1.75;color:var(--ink2);text-align:left">目前是訪客模式。要同步分類、地圖和頭像時，再用 Google 登入。</div>'
        +'<button type="button" id="acGoogle" class="primary" style="width:100%;background:#fff;color:#3c4043;border:1.5px solid var(--line);margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c-6.6 0-12-5.4-12-12s5.4-12 12-12z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>用 Google 登入</button>'
        +'<div class="ceBtns"><button type="button" id="acCancel">取消</button></div>')
     +'</div>';
