@@ -481,9 +481,9 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
       <div id="map"></div>
       <div id="mapLegend">
         <b>怎麼看圖釘</b>
-        <div class="lgRow"><span class="dot pinMini" style="--c:#E2452C"></span>實心 ＝ 去過了</div>
-        <div class="lgRow"><span class="dot pinMini" style="--c:#1F7A6B;box-shadow:inset 0 0 0 2.5px #1F7A6B;background:#fff"></span>空心 ＝ 還沒去</div>
-        <div class="lgRow" style="margin-top:4px">顏色 ＝ 分類 · 點圖釘看心得</div>
+        <div class="lgRow"><span class="dot pinMini" style="--c:#1F7A6B"></span>（外圈）去過了</div>
+        <div class="lgRow"><span class="dot pinMini" style="--c:#E9A319"></span>（外圈）還沒去</div>
+        <div class="lgRow" style="margin-top:4px">中心點顏色 ＝ 分類 · 點圖釘看心得</div>
       </div>
       <div id="todoGeo" class="hide"></div>
     </section>
@@ -632,9 +632,9 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
     <label class="lb">圖釘顏色要跟著什麼走？</label>
     <div class="segRow" id="colorModeSeg">
       <button data-v="cat" class="on">分類顏色</button>
-      <button data-v="status">去過 / 沒去過</button>
+      <button data-v="status" style="display:none">去過 / 沒去過</button>
     </div>
-    <label class="lb">狀態顏色（選「去過 / 沒去過」時圖釘用這兩色；清單徽章也會跟著變）</label>
+    <label class="lb">狀態顏色（圖釘外圈用這兩色；清單徽章也會跟著變）</label>
     <div class="cmRow" id="stRow-done"></div>
     <div class="cmRow" id="stRow-todo"></div>
     <label class="lb">分類顏色（點色塊直接改；每個分類都能改名、刪除，刪掉的釘子會移到未分類）</label>
@@ -652,10 +652,8 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
 .pinwrap{background:none;border:none}
-.pin{position:relative;width:22px;height:22px;background:var(--c);border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
-.pin::after{content:'';position:absolute;left:6px;top:6px;width:8px;height:8px;border-radius:50%;background:#fff}
-.pin.hollow{background:#fff}
-.pin.hollow::after{background:var(--c)}
+.pin{position:relative;width:24px;height:24px;background:var(--c);border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
+.pin::after{content:'';position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:var(--cc,#fff);border:1.5px solid rgba(255,255,255,.9)}
 .pp .pp-foot{flex-wrap:wrap}
 </style>
 <script>
@@ -1022,8 +1020,9 @@ function renderMarkers(){
     if(p.lat==null||p.lng==null)return;
     pts.push([p.lng,p.lat]);
     var el=document.createElement('button');el.type='button';
-    el.className='pin '+((p.status==='done'?S.pinShape.done:S.pinShape.todo)||'hollow');
-    el.style.setProperty('--c',pinFill(p));
+    el.className='pin';
+    el.style.setProperty('--c',stColor(p.status));
+    el.style.setProperty('--cc',catColor(p.cat));
     el.title=p.name||'';
     el.setAttribute('aria-label',p.name||'圖釘');
     el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
@@ -1905,19 +1904,11 @@ function loadSamples(){
 /* ---------- 圖例與顏色管理 ---------- */
 function renderLegend(){
   var el=$('#mapLegend');if(!el)return;
-  var wd=function(st){return S.pinShape[st]==='hollow'?'空心':'實心'};
-  var dc=function(st){return '<span class="dot'+(S.pinShape[st]==='hollow'?' ring':'')+'" style="--c:'+S.statusColors[st]+'"></span>'};
-  if(S.pinColorMode==='status'){
-    el.innerHTML='<b>怎麼看圖釘</b>'
-      +'<div class="lgRow">'+dc('done')+'去過了（'+wd('done')+'）</div>'
-      +'<div class="lgRow">'+dc('todo')+'還沒去（'+wd('todo')+'）</div>'
-      +'<div class="lgRow" style="margin-top:4px">顏色＝去過/沒去過 · 點圖釘看心得</div>';
-  }else{
-    el.innerHTML='<b>怎麼看圖釘</b>'
-      +'<div class="lgRow">'+dc('done')+'去過了（'+wd('done')+'）</div>'
-      +'<div class="lgRow">'+dc('todo')+'還沒去（'+wd('todo')+'）</div>'
-      +'<div class="lgRow" style="margin-top:4px">顏色 ＝ 分類 · 點圖釘看心得</div>';
-  }
+  var lg=function(st){return '<div class="lgRow"><span class="dot pinMini" style="--c:'+S.statusColors[st]+'"></span>（外圈）'+(st==='done'?'去過了':'還沒去')+'</div>'};
+  el.innerHTML='<b>怎麼看圖釘</b>'
+    +lg('done')
+    +lg('todo')
+    +'<div class="lgRow" style="margin-top:4px">中心點顏色 ＝ 分類 · 點圖釘看心得</div>';
 }
 function swatchHtml(color,label){
   return '<label class="swatch" style="background:'+color+'"><input type="color" value="'+normHex(color)+'" aria-label="'+escAttr(label)+'"></label>';
@@ -1928,11 +1919,7 @@ function renderStatusRows(){
     var st=pair[0],label=pair[1];
     var row=document.querySelector('#stRow-'+st);
     row.innerHTML='<span class="cmName" style="flex:1">'+label+'</span>'
-      +'<span class="shSeg" style="display:flex;gap:0;margin-right:8px;border:1.5px solid var(--line);border-radius:999px;overflow:hidden">'
-      +'<button type="button" class="shBtn'+(S.pinShape[st]==='solid'?' on':'')+'" data-sh="solid" style="border:none;background:'+(S.pinShape[st]==='solid'?'var(--ink)':'#fff')+';color:'+(S.pinShape[st]==='solid'?'#fff':'var(--ink2)')+';font-size:11.5px;padding:4px 10px;cursor:pointer">實心</button>'
-      +'<button type="button" class="shBtn'+(S.pinShape[st]==='hollow'?' on':'')+'" data-sh="hollow" style="border:none;background:'+(S.pinShape[st]==='hollow'?'var(--ink)':'#fff')+';color:'+(S.pinShape[st]==='hollow'?'#fff':'var(--ink2)')+';font-size:11.5px;padding:4px 10px;cursor:pointer">空心</button>'
-      +'</span>'
-      +swatchHtml(S.statusColors[st],label+'顏色');
+      +swatchHtml(S.statusColors[st],label+'顏色（圖釘外圈）');
     row.querySelector('input[type=color]').addEventListener('input',function(e){
       S.statusColors[st]=e.target.value;persist();renderAll();
     });
@@ -2172,7 +2159,7 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google（開啟雲端同步）</button><button id="mLogin2">登入 Google（相容模式—彈窗空白時用這個）</button>')
-    +'<button id="mUpdate">⬆️ 更新 App（選檔案→自動上傳）</button><button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginGoogle()});var lg2=document.querySelector('#mLogin2');if(lg2)lg2.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
