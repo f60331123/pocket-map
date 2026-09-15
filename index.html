@@ -2092,6 +2092,16 @@ $('#guestBtn').addEventListener('click',function(){S.user={name:'訪客'};persis
 /* ---------- 真實 Google 登入＋雲端同步（存到你自己的雲端硬碟隱藏資料夾） ---------- */
 var DEFAULT_CID='415901525252-gojdr4ttvlufk5binlqlkhfbkub5k5r1.apps.googleusercontent.com';/*使用者 Client ID 內建處：填入後朋友免貼金鑰*/
 function cidGet(){return ((DEFAULT_CID||'')||(localStorage.getItem(KEY+'_cid')||'')).trim()}
+function csecGet(){return (localStorage.getItem(KEY+'_csec')||'').trim()}
+function askCsec(after){
+  chipEditPopup({title:'設定雲端同步（第 2 步）',name:'',onSave:function(v){
+    v=(v||'').trim();if(!v)return;
+    localStorage.setItem(KEY+'_csec',v);toast('已存用戶端密碼，繼續登入…');
+    if(after)setTimeout(after,300);
+  }});
+  var ov=document.querySelector('#chipEditOverlay .ceCard');
+  if(ov)ov.insertAdjacentHTML('beforeend','<div style="font-size:12px;color:#8A8674;margin-top:10px">貼上「用戶端密碼」：Google Cloud Console → API 和服務 → 憑證 → 點你的 OAuth 用戶端 → 右側「用戶端密碼」按複製。</div>');
+}
 function setSync(st,extra){
   var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'僅存本機（登入後自動同步）'}[st]||''}
   var r=document.querySelector('#mSyncRow');if(r)r.textContent=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'僅存本機',off:'未同步（僅本機）'})[st]||'';
@@ -2134,7 +2144,7 @@ var refreshing=null;
 function tryRefresh(){
   if(refreshing)return refreshing;
   if(!(S.user&&S.user.rtok))return Promise.reject({auth:true});
-  refreshing=fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(S.user.rtok)+'&client_id='+encodeURIComponent(cidGet())})
+  refreshing=fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(S.user.rtok)+'&client_id='+encodeURIComponent(cidGet())+'&client_secret='+encodeURIComponent(csecGet())})
   .then(function(r){return r.json()}).then(function(t){
     if(!t||!t.access_token)throw{auth:true};
     S.user.tok=t.access_token;persist();return t.access_token;
@@ -2149,6 +2159,7 @@ function authExpired(){
 function doAuthRedirect(){authTip()}
 function loginRedirectFlow(){
   var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
+  if(!csecGet()){askCsec(loginRedirectFlow);return}
   pkce().then(function(ch){
     var ver=localStorage.getItem(KEY+'_pv')||'';
     try{document.cookie=KEY+'_pv='+ver+';path=/;max-age=3600;SameSite=Lax'}catch(e){}
@@ -2160,7 +2171,7 @@ function finishLoginCode(code,stVer){
   var ver=stVer||localStorage.getItem(KEY+'_pv')||'';
   try{var m=document.cookie.match(new RegExp('(?:^|; )'+KEY+'_pv=([^;]*)'));if(!ver&&m)ver=m[1];localStorage.removeItem(KEY+'_pv');document.cookie=KEY+'_pv=;path=/;max-age=0'}catch(e){}
   setSync('syncing');
-  fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)+'&client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&grant_type=authorization_code'+(ver?'&code_verifier='+encodeURIComponent(ver):'')})
+  fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)+'&client_id='+encodeURIComponent(cid)+'&client_secret='+encodeURIComponent(csecGet())+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&grant_type=authorization_code'+(ver?'&code_verifier='+encodeURIComponent(ver):'')})
   .then(function(r){return r.json()}).then(function(t){
     if(!t||!t.access_token)throw new Error((t&&t.error?t.error+(t.error_description?' — '+t.error_description:''):'notok'));
     return gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+t.access_token}}).then(function(r){return r.json()}).then(function(u){
