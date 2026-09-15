@@ -2334,7 +2334,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v69';
+var APP_VER='v70';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2393,14 +2393,23 @@ function fbApply(d,silent){
   FB.applying=true;
   try{
     var dd=JSON.parse(JSON.stringify(d));delete dd._t;delete dd.user;
-    var inTrash=S.trash||{};var cids={};
-    if(Array.isArray(dd.pins))dd.pins=dd.pins.filter(function(p){ /* 墓碑過濾：本機或雲端記錄過「已刪」的店，一律不留 */
+    /* Firebase 會把空陣列整個刪欄位 — 沒有就補空陣列，否則本機永遠清不掉 */
+    if(!Array.isArray(dd.pins))dd.pins=[];
+    if(!Array.isArray(dd.customCats))dd.customCats=[];
+    if(!Array.isArray(dd.folders))dd.folders=[];
+    if(!Array.isArray(dd.catOrder))dd.catOrder=[];
+    if(!dd.trash)dd.trash={};
+    if(!dd.catColors)dd.catColors={};
+    if(!dd.catNames)dd.catNames={};
+    if(!dd.hiddenCats)dd.hiddenCats=[];
+    if(!dd.statusColors)dd.statusColors={};
+    var inTrash=dd.trash;
+    dd.pins=dd.pins.filter(function(p){ /* 墓碑過濾：雲端記錄過「已刪」的店，一律不留 */
       if(inTrash[p.id]&&inTrash[p.id]>=(+(p.updated||p.created||0)))return false;
-      if(dd.trash&&dd.trash[p.id]&&dd.trash[p.id]>=(+(p.updated||p.created||0)))return false;
       return true;
     });
     applyState(dd);
-    FB.lastPushed=JSON.stringify((function(){var x=stateData();delete x.user;delete x.trash;return x})());
+    FB.lastPushed=JSON.stringify((function(){var x=stateData();delete x.user;return x})());
     FB.lastT=+(d._t||Date.now());
     try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}
     renderAll();renderFolderChips();renderCatChips();
