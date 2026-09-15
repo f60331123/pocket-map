@@ -483,8 +483,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
         <b>怎麼看圖釘</b>
         <div class="lgRow"><span class="dot pinMini" style="--c:#1F7A6B"></span>去過了</div>
         <div class="lgRow"><span class="dot pinMini" style="--c:#E9A319"></span>還沒去</div>
-        <div class="lgRow" style="margin-top:4px">中心點顏色 ＝ 分類 · 點圖釘看心得</div>
-      </div>
+              </div>
       <div id="todoGeo" class="hide"></div>
     </section>
     <section id="listView" class="hide">
@@ -1908,7 +1907,7 @@ function renderLegend(){
   el.innerHTML='<b>怎麼看圖釘</b>'
     +lg('done')
     +lg('todo')
-    +'<div class="lgRow" style="margin-top:4px">中心點顏色 ＝ 分類 · 點圖釘看心得</div>';
+    ;
 }
 function swatchHtml(color,label){
   return '<label class="swatch" style="background:'+color+'"><input type="color" value="'+normHex(color)+'" aria-label="'+escAttr(label)+'"></label>';
@@ -2084,19 +2083,22 @@ function loginGoogle(){
     }catch(e){toast('Google 登入啟動失敗：'+((e&&e.message)||e))}
   });
 }
+function gfetch(u,o){return fetch(u,o).then(function(r){if(r.status===401)throw{auth:true};return r})}
+function authExpired(){if(sessionStorage.getItem(KEY+'_reauth')){setSync('err');toast('Google 登入過期了 — 點頭像再登入一次');return}sessionStorage.setItem(KEY+'_reauth','1');toast('Google 登入過期了 — 正在幫你重新登入…');setTimeout(function(){loginRedirectFlow()},900)}
 function loginRedirectFlow(){
   var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
   location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=token&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&include_granted_scopes=true&prompt=select_account';
 }
 function finishLogin(tok){
   setSync('syncing');
-  fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}})
+  gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}})
   .then(function(r){return r.json()}).then(function(u){
     S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'使用者',email:(u&&u.email)||'',tok:tok,real:1};
     $('#avatarBtn').textContent=S.user.name.charAt(0);
+    sessionStorage.removeItem(KEY+'_reauth');
     persist();setSync('syncing');
     syncPull(tok);
-  }).catch(function(){toast('Google 帳號資料讀取失敗');setSync('err')});
+  }).catch(function(e){if(e&&e.auth){authExpired();return}toast('Google 帳號資料讀取失敗');setSync('err')});
 }
 function logoutGoogle(){
   var t=S.user&&S.user.tok;
@@ -2106,14 +2108,14 @@ function logoutGoogle(){
   toast('已登出 — 釘點都還在本機，之後登入會自動同步');
 }
 var cloudFid=null,pulling=false,pushTimer=null;
-function driveList(tok){return fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+tok}}).then(function(r){return r.json()})}
-function driveGet(tok,id){return fetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers:{Authorization:'Bearer '+tok}}).then(function(r){return r.json()})}
+function driveList(tok){return gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+tok}}).then(function(r){return r.json()})}
+function driveGet(tok,id){return gfetch('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers:{Authorization:'Bearer '+tok}}).then(function(r){return r.json()})}
 function driveSave(tok,id,payload){
-  if(id)return fetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json()});
+  if(id)return gfetch('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json()});
   var fd=new FormData();
   fd.append('metadata',new Blob([JSON.stringify({name:'pocket-pins-data.json',parents:['appDataFolder']})],{type:'application/json'}));
   fd.append('file',new Blob([JSON.stringify(payload)],{type:'application/json'}));
-  return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd}).then(function(r){return r.json()});
+  return gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd}).then(function(r){return r.json()});
 }
 function doPush(tok){
   setSync('syncing');
@@ -2124,7 +2126,7 @@ function doPush(tok){
     var f=gl&&gl.files&&gl.files[0];if(f)cloudFid=f.id;
     return driveSave(tok,f?f.id:null,payload);
   }).then(function(){localStorage.setItem(KEY+'_savedAt',String(Date.now()));setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}))})
-  .catch(function(){setSync('err')});
+  .catch(function(e){if(e&&e.auth){authExpired();return}setSync('err')});
 }
 function queuePush(){
   if(!S.user||!S.user.tok||pulling)return;
@@ -2153,7 +2155,7 @@ function syncPull(tok){
       setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));
       toast('已同步：共 '+merged.pins.length+' 家店（兩台合併，不會互相覆蓋）');
     });
-  }).catch(function(){setSync('err')});
+  }).catch(function(e){if(e&&e.auth){authExpired();return}setSync('err')});
 }
 $('#avatarBtn').addEventListener('click',function(){
   var existing=$('#meMenu');
