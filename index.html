@@ -2157,12 +2157,9 @@ function tryRefresh(){
 }
 function authTip(){setSync('err');if(!sessionStorage.getItem(KEY+'_authTip')){sessionStorage.setItem(KEY+'_authTip','1');toast('同步需要重新登入 — 點右上角頭像 →「登入 Google」')}}
 function autoReconnect(){
-  if(!(S.user&&S.user.email))return false;
-  if(sessionStorage.getItem(KEY+'_autoRe'))return false;
-  sessionStorage.setItem(KEY+'_autoRe','1');
-  toast('通行證過期 — 正在重新連結 Google 自動同步…');
-  setTimeout(function(){loginRedirectFlow()},1200);
-  return true;
+  /* v65：Google 長期憑證拿不到（已確認），自動重連只會無限跳登入頁 — 正式停用。
+     雲端同步改由 Firebase 接手；Google 登入僅保留手動入口（頭像選單）。 */
+  return false;
 }
 function authExpired(){
   if(S.user&&S.user.rtok){tryRefresh().then(function(){if(S.user&&S.user.tok)syncPull(S.user.tok)}).catch(function(){doAuthRedirect()});return}
