@@ -2221,9 +2221,9 @@ function syncDiag(){
   ov.innerHTML='<div class="ceCard"><h4>\ud83d\udd0d 同步狀態檢查</h4><div id="sdBody" style="font-size:13px;line-height:1.8;color:var(--ink2)">\u6aa2\u67e5\u4e2d\u2026</div><div class="ceBtns"><button type="button" id="sdClose">關閉</button><button type="button" class="primary" id="sdSync">立即同步</button></div></div>';
   document.body.appendChild(ov);
   $('#sdClose').addEventListener('click',function(){ov.remove()});
-  $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else toast('先登入 Google，再回來按檢查')});
+  $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else if(S.user&&S.user.email){toast('登入通行證過期了 — 正在幫你重新登入…');authExpired()}else{toast('先登入 Google，再回來按檢查')}});
   var b=$('#sdBody');
-  b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?esc(S.user.email)+'（已登入）':'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
+  b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?(esc(S.user.email)+'（已登入）'+((S.user&&S.user.tok)?'':'<br><b style="color:#C33">但登入通行證已過期 — 這就是不同步的原因，按「立即同步」會自動重登</b>')):'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
     +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店';
   if(!(S.user&&S.user.tok))return;
   gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+S.user.tok}})
