@@ -2141,14 +2141,12 @@ function tryRefresh(){
   }).catch(function(e){throw e}).finally(function(){refreshing=null});
   return refreshing;
 }
+function authTip(){setSync('err');if(!sessionStorage.getItem(KEY+'_authTip')){sessionStorage.setItem(KEY+'_authTip','1');toast('同步需要重新登入 — 點右上角頭像 →「登入 Google」')}}
 function authExpired(){
   if(S.user&&S.user.rtok){tryRefresh().then(function(){if(S.user&&S.user.tok)syncPull(S.user.tok)}).catch(function(){doAuthRedirect()});return}
   doAuthRedirect();
 }
-function doAuthRedirect(){
-  if(sessionStorage.getItem(KEY+'_reauth')){setSync('err');toast('Google \u767b\u5165\u904e\u671f\u4e86 — \u9ede\u982d\u50cf\u518d\u767b\u5165\u4e00\u6b21');return}
-  sessionStorage.setItem(KEY+'_reauth','1');toast('Google \u767b\u5165\u904e\u671f\u4e86 — \u6b63\u5728\u5e6b\u4f60\u91cd\u65b0\u767b\u5165\u2026');setTimeout(function(){loginRedirectFlow()},900);
-}
+function doAuthRedirect(){authTip()}
 function loginRedirectFlow(){
   var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
   pkce().then(function(ch){
@@ -2198,7 +2196,7 @@ function doPush(tok){
     var f=gl&&gl.files&&gl.files[0];if(f)cloudFid=f.id;
     return driveSave(tok,f?f.id:null,payload);
   }).then(function(){localStorage.setItem(KEY+'_savedAt',String(Date.now()));setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}))})
-  .catch(function(e){if(e&&e.auth){authExpired();return}setSync('err')});
+  .catch(function(e){if(e&&e.auth){authTip();return}setSync('err')});
 }
 function queuePush(){
   if(!S.user||!S.user.tok||pulling)return;
@@ -2227,7 +2225,7 @@ function syncPull(tok){
       setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));
       toast('已同步：共 '+merged.pins.length+' 家店（兩台合併，不會互相覆蓋）');
     });
-  }).catch(function(e){if(e&&e.auth){authExpired();return}setSync('err')});
+  }).catch(function(e){if(e&&e.auth){authTip();return}setSync('err')});
 }
 $('#avatarBtn').addEventListener('click',function(){
   var existing=$('#meMenu');
@@ -2252,7 +2250,7 @@ function syncDiag(){
   ov.innerHTML='<div class="ceCard"><h4>\ud83d\udd0d 同步狀態檢查</h4><div id="sdBody" style="font-size:13px;line-height:1.8;color:var(--ink2)">\u6aa2\u67e5\u4e2d\u2026</div><div class="ceBtns"><button type="button" id="sdClose">關閉</button><button type="button" class="primary" id="sdSync">立即同步</button></div></div>';
   document.body.appendChild(ov);
   $('#sdClose').addEventListener('click',function(){ov.remove()});
-  $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else if(S.user&&S.user.email){toast('登入通行證過期了 — 正在幫你重新登入…');authExpired()}else{toast('先登入 Google，再回來按檢查')}});
+  $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else{toast('正在開啟 Google 登入…');loginRedirectFlow()}});
   var b=$('#sdBody');
   b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?(esc(S.user.email)+'（已登入）'+((S.user&&S.user.tok)?'':'<br><b style="color:#C33">但登入通行證已過期 — 這就是不同步的原因，按「立即同步」會自動重登</b>')):'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
     +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店'
