@@ -1711,13 +1711,15 @@ function nomGeo(q){
       return {lat:r.lat,lon:r.lon,display_name:r.display_name+' 〖OSM 街級〗'};})});
 }
 var geoNetErr=false;
-function geocode(q){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';if(city&&q&&!/\u5e02|\u7e23/.test(q.slice(-6)))q=q+', '+city;
+function geocode(q0){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';var shop=String(q0||'').replace(/[^\u4e00-\u9fffA-Za-z0-9]/g,'').replace(/[\u53f0\u81fa][^A-Za-z0-9]{0,4}[\u5e02\u7e23]$/,'');
+  var q=q0;if(city&&q0&&!/\u5e02|\u7e23/.test(q0.slice(-6)))q=q0+', '+city;
   geoNetErr=false;
-  var cjk=q.replace(/[^\u4e00-\u9fff]/g,'');
-  return Promise.all([arcGeo(q).catch(function(){geoNetErr=true;return[]}),nomGeo(q).catch(function(){return[]}),photonGeo(q).catch(function(){return[]})]).then(function(rs){
-    var all=normGeo(rs[0].concat(rs[1],rs[2]));
-    if(!cjk||!all.length)return all;
-    var hit=all.filter(function(r){var n=r.display_name.replace(/[^\u4e00-\u9fff]/g,'');if(!n)return false;if(cjk.length<2)return n.indexOf(cjk)>=0;for(var i=0;i+1<cjk.length;i++)if(n.indexOf(cjk.substr(i,2))>=0)return true;return false});
+  var jobs=[arcGeo(q).catch(function(){geoNetErr=true;return[]}),nomGeo(q).catch(function(){return[]}),photonGeo(q).catch(function(){return[]})];
+  if(shop.length>=2)jobs.push(new Promise(function(res){setTimeout(res,350)}).then(function(){return nomGeo(shop+' '+(city||'台灣')).catch(function(){return[]})}));
+  return Promise.all(jobs).then(function(rs){
+    var all=normGeo(rs[0].concat(rs[1],rs[2],rs[3]||[]));
+    if(shop.length<2||!all.length)return all;
+    var hit=all.filter(function(r){var n=r.display_name.replace(/[^\u4e00-\u9fff]/g,'');if(!n)return false;for(var i=0;i+1<shop.length;i++)if(n.indexOf(shop.substr(i,2))>=0)return true;return false});
     return hit.length?hit.concat(all.filter(function(r){return hit.indexOf(r)<0})):all;
   });
 }
