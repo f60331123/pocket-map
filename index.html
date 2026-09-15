@@ -99,7 +99,10 @@ header{
 .avatar{
   width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;
   font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;position:relative;
+  overflow:hidden;flex:none;
 }
+.avatar.out{background:#C9C5B6}
+.avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
 .menu{
   position:absolute;right:0;top:46px;background:#fff;border:1px solid var(--line);
   border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:130px;z-index:1200;
@@ -2179,7 +2182,7 @@ function enterApp(){
   $('#app').classList.remove('hide');
   initMainMap();
   renderAll();
-  $('#avatarBtn').textContent=((S.user&&S.user.name)||'訪').charAt(0);
+  renderAvatar();
 }
 $('#googleBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp();toast('示範登入完成（真實版會走真正的 Google 帳號）')});
 $('#guestBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp()});
@@ -2276,7 +2279,7 @@ function finishLoginCode(code,stVer){
     if(!t||!t.access_token)throw new Error((t&&t.error?t.error+(t.error_description?' — '+t.error_description:''):'notok'));
     return gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+t.access_token}}).then(function(r){return r.json()}).then(function(u){
       S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'\u4f7f\u7528\u8005',email:(u&&u.email)||'',tok:t.access_token,rtok:t.refresh_token||(S.user&&S.user.rtok)||'',real:1};
-      $('#avatarBtn').textContent=S.user.name.charAt(0);
+      $('#avatarBtn').textContent=S.user.name.charAt(0);renderAvatar();
       sessionStorage.removeItem(KEY+'_reauth');sessionStorage.removeItem(KEY+'_autoRe');
       persist();setSync('syncing');
       if(S.user.rtok)toast('\u767b\u5165\u5b8c\u6210\uff01\u4ee5\u5f8c\u81ea\u52d5\u540c\u6b65\uff0c\u4e0d\u7528\u518d\u91cd\u8907\u767b\u5165');
@@ -2288,7 +2291,7 @@ function logoutGoogle(){
   var t=S.user&&S.user.tok;
   S.user=null;persist();
   try{if(t&&window.google&&google.accounts)google.accounts.oauth2.revoke(t,function(){})}catch(e){}
-  $('#avatarBtn').textContent='訪';setSync('off');
+  $('#avatarBtn').textContent='訪';renderAvatar();setSync('off');
   toast('已登出 — 釘點都還在本機，之後登入會自動同步');
 }
 var cloudFid=null,pulling=false,pushTimer=null;
@@ -2354,13 +2357,19 @@ $('#avatarBtn').addEventListener('click',function(){
   if(existing){existing.remove();return}
   this.parentElement.style.position='relative';
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
-  m.innerHTML='<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mFb">登入</button><button id="mShared">共用地圖</button><button id="mPersonal">個人地圖</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+  m.innerHTML='<button id="mFb">登入</button><button id="mPersonal">個人地圖</button>'
+    +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:42px;text-align:center;font-size:18px;flex:none" title="新增共用地圖（最多5個）">＋</button></div>'
+    +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
+    +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
+    +'<button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
   document.querySelector('#mPersonal').addEventListener('click',function(){m.remove();if(S.sharedRoom)wsSwitch('',function(){toast('已切回個人地圖')});else toast('現在就是在你的個人地圖')});
+  document.querySelector('#mAddWs').addEventListener('click',function(){m.remove();wsQuickAdd()});
   renderAcctUI();
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
@@ -2420,7 +2429,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v81';
+var APP_VER='v82';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2486,7 +2495,13 @@ function acctUI(){
   var u=AUTH.user;
   ov.innerHTML='<div class="ceCard"><h4>登入</h4>'
     +(u
-      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">雲端正在同步到「只有你能讀寫」的私人空間。朋友的帳號就算打開同一個網頁，也看不到你的清單。</span></div>'
+      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">✨ 你的專屬口袋開張啦！換手機登進來，店店們會乖乖排隊回來找你 🍜</span></div>'
+        +(function(){var img=avImgGet(),col=avColorGet()||'#7B9E6B';
+          return '<div style="text-align:center;margin:10px 0 2px"><div style="width:64px;height:64px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;overflow:hidden;'+(img?'':'background:'+col)+'">'+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover">':escAttr((u.email||'我').charAt(0).toUpperCase()))+'</div>'
+          +'<div style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap">'
+          +['#E8A87C','#D97B7B','#8FB98F','#7BA6D9','#B08BD9','#E8C46C','#7B9E9E','#9E7B7B'].map(function(c){return '<button type="button" data-avc="'+c+'" style="width:26px;height:26px;border-radius:50%;background:'+c+';border:2.5px solid '+(col===c?'#3c4043':'#fff')+';box-shadow:0 0 0 1px var(--line)"></button>'}).join('')
+          +'</div><div style="font-size:11px;color:#8A8674;margin-top:4px">點色塊換頭像顏色（會蓋掉圖片）</div>'
+          +'<div class="ceBtns"><button type="button" id="avImgBtn">📷 用自己的圖片</button>'+(img?'<button type="button" id="avImgRm">移除圖片</button>':'')+'</div></div>'})()
       :'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left"></div>'
         +'<div style="margin-top:8px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">信箱</div><input class="txt" id="acEmail" type="email" placeholder="you@example.com" style="width:100%"></div>'
         +'<div style="margin-top:6px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">密碼（至少 6 碼）</div><input class="txt" id="acPass" type="password" placeholder="" style="width:100%"></div>'
@@ -2498,6 +2513,33 @@ function acctUI(){
     +'</div>';
   document.body.appendChild(ov);
   document.getElementById('acCancel').addEventListener('click',function(){ov.remove()});
+  ov.querySelectorAll('[data-avc]').forEach(function(b){b.addEventListener('click',function(){
+    localStorage.setItem(KEY+'_avc',b.dataset.avc);localStorage.removeItem(KEY+'_avi');
+    renderAvatar();toast('頭像換色完成 ✨');setTimeout(function(){ov.remove();acctUI()},250);
+  })});
+  var aib=document.getElementById('avImgBtn');
+  if(aib)aib.addEventListener('click',function(){
+    var fi=document.createElement('input');fi.type='file';fi.accept='image/*';
+    fi.onchange=function(){
+      var f=fi.files&&fi.files[0];if(!f)return;
+      var rd=new FileReader();
+      rd.onload=function(){
+        var im=new Image();
+        im.onload=function(){
+          var cv=document.createElement('canvas');cv.width=cv.height=128;
+          var cx=cv.getContext('2d');var s=Math.min(im.width,im.height);
+          cx.drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,128,128);
+          try{localStorage.setItem(KEY+'_avi',cv.toDataURL('image/jpeg',0.85))}catch(e){toast('圖片太大存不進去，換小一點的');return}
+          renderAvatar();toast('頭像換好了 📸');setTimeout(function(){ov.remove();acctUI()},250);
+        };
+        im.src=rd.result;
+      };
+      rd.readAsDataURL(f);
+    };
+    fi.click();
+  });
+  var air=document.getElementById('avImgRm');
+  if(air)air.addEventListener('click',function(){localStorage.removeItem(KEY+'_avi');renderAvatar();toast('已移除圖片，改用顏色頭像');setTimeout(function(){ov.remove();acctUI()},250)});
   if(u){document.getElementById('acOut').addEventListener('click',function(){
     firebase.auth().signOut().then(function(){ov.remove();toast('已登出 — 資料還在這台裝置本機')});
   });return}
@@ -2540,9 +2582,20 @@ function acctUI(){
     firebase.auth().sendPasswordResetEmail(em).then(function(){toast('重設密碼的信寄出了 — 去信箱收信')}).catch(function(){toast('寄送失敗 — 這個信箱可能還沒註冊過')});
   });
 }
+function renderAvatar(){
+  var b=document.querySelector('#avatarBtn');if(!b)return;
+  var img=avImgGet();
+  b.classList.toggle('out',!AUTH.user);
+  if(img){b.innerHTML='<img src="'+img+'" alt="">';return}
+  b.textContent=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'訪';
+  b.style.background=AUTH.user?(avColorGet()||''):'#C9C5B6';
+  if(!AUTH.user)b.style.removeProperty('background');
+}
+function avColorGet(){return localStorage.getItem(KEY+'_avc')||''}
+function avImgGet(){return localStorage.getItem(KEY+'_avi')||''}
 function renderAcctUI(){
-  var r=document.querySelector('#mAcct');
   var r2=document.querySelector('#mFb');if(r2)r2.textContent=AUTH.user?'登出':'登入';
+  renderAvatar();
 }
 function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPath(){return (AUTH.user&&S.sharedRoom)?('shared/'+S.sharedRoom):('users/'+AUTH.user.uid)}
@@ -2750,6 +2803,16 @@ function wsSwitch(code,cb){
 }
 function wsRooms(){try{return JSON.parse(localStorage.getItem(KEY+'_wsr')||'[]')}catch(e){return []}}
 function wsSaveRooms(a){localStorage.setItem(KEY+'_wsr',JSON.stringify(a))}
+function wsQuickAdd(){
+  if(!AUTH.user){toast('先登入才能建立共用地圖（選單 → 登入）');return}
+  var rooms=wsRooms();
+  if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
+  var code=fbNewCode(8);
+  FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
+    rooms.push({code:code});wsSaveRooms(rooms);
+    wsSwitch(code,function(){toast('✓ 已建立（'+rooms.length+'/5）— 邀請碼：'+code)});
+  }).catch(function(){toast('建立失敗，檢查網路再試')});
+}
 function sharedUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   function render(){
