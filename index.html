@@ -600,6 +600,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
       <button class="saveBtn" id="saveBtn">釘起來</button>
       <button class="delBtn hide" id="delBtn">刪除這筆紀錄</button>
+      <button class="delBtn hide" id="sharePinBtn" style="background:#EEF3E8;color:#4C6B3C">📤 分享給朋友</button>
 
   </div>
 </div>
@@ -2421,7 +2422,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v73';
+var APP_VER='v75';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2465,7 +2466,18 @@ function fbInit(){
     return FB.ready;
   }catch(e){return false}
 }
-function fbNewCode(){var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<6;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
+function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
+/* v75：每個人打開網頁就自動擁有自己的私密代碼 — 朋友用自己的，互不相干；
+   舊用戶（還在用公開預設代碼、本機有資料、雲端公開房間也有資料＝可能多裝置）先不動，走手機設定換代碼 */
+function ensurePrivateCode(cb){
+  if(localStorage.getItem(KEY+'_fbcode')){cb();return}
+  var finish=function(){localStorage.setItem(KEY+'_fbcode',fbNewCode(8));cb()};
+  if(!(S.pins&&S.pins.length)){finish();return}
+  fetch((fbCfgRaw()?JSON.parse(fbCfgRaw()).databaseURL:DEFAULT_FB.databaseURL)+'/rooms/'+DEFAULT_FBCODE+'.json?shallow=true').then(function(r){return r.json()}).then(function(d){
+    if(d&&Object.keys(d).length){cb()}/*舊多裝置用戶：保持原代碼，由設定頁引導換私密*/
+    else finish();
+  }).catch(function(){finish()});
+}
 function fbPush(){
   if(!FB.ready||FB.applying)return;
   var d=stateData();delete d.user;
@@ -2535,9 +2547,12 @@ function fbSetup(){
   var cur=fbCfgRaw(),code=fbCode();
   ov.innerHTML='<div class="ceCard"><h4>\u2601\ufe0f 雲端同步設定（Firebase）</h4>'
     +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">✅ 雲端設定已內建，<b>不用再貼 firebaseConfig</b> — 只要把兩台裝置的「同步代碼」填成同一個即可。下方設定留給進階玩家（可換成自己的 Firebase）。</div>'
+    +(code===DEFAULT_FBCODE
+      ?'<div style="font-size:12.5px;line-height:1.6;color:#B4451F;background:#FDF2EC;border-radius:8px;padding:8px 10px;margin-top:8px;text-align:left"><b>⚠️ 你目前用的是內建公開代碼</b><br>同步不是靠帳號登入，而是靠「代碼」進同一個雲端房間。這組代碼寫在 App 裡、App 又放在公開網頁上——理論上拿到網址的人都能看到你的清單。<b>強烈建議：按下面「換一個」產生私密代碼，然後兩台裝置都填同一組，按「儲存並連線」。</b></div>'
+      :'<div style="font-size:12.5px;color:#3F7D3F;margin-top:6px;text-align:left">🔒 目前使用<b>私密代碼</b>（'+escAttr(code)+'）— 只有知道這組代碼的裝置能同步你的清單。</div>')
     +'<textarea class="txt" id="fbCfg" rows="5" style="width:100%;font-size:12px;margin-top:8px" placeholder="貼上 firebaseConfig 整串">{}</textarea>'
     +'<div style="font-size:12.5px;color:var(--ink2);margin-top:6px;text-align:left">同步代碼（兩台裝置填同一個）：</div>'
-    +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="fbCode" value="'+escAttr(code)+'" style="flex:1;text-transform:uppercase" placeholder="6碼代碼"><button type="button" id="fbGen" style="white-space:nowrap">換一個</button></div>'
+    +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="fbCode" value="'+escAttr(code)+'" style="flex:1;text-transform:uppercase" placeholder="8碼私密代碼"><button type="button" id="fbGen" style="white-space:nowrap">🔒 換一個（私密）</button></div>'
     +'<div class="ceBtns">'+(cur?'<button type="button" class="danger" id="fbDel">移除設定</button>':'')+'<button type="button" id="fbCancel">取消</button><button type="button" class="primary" id="fbSave">儲存並連線</button></div></div>';
   document.body.appendChild(ov);
   if(cur)document.getElementById('fbCfg').value=cur;
@@ -2548,16 +2563,54 @@ function fbSetup(){
     var raw=document.getElementById('fbCfg').value.trim().replace(/^[^{]*/,'').replace(/[^}]*$/,'');
     var cd=(document.getElementById('fbCode').value.trim()||fbNewCode()).toUpperCase();
     try{var c=JSON.parse(raw);if(!c||!c.databaseURL)throw 0}catch(e){toast('設定格式不對 — 要貼完整的 firebaseConfig（含 databaseURL）');return}
-    if(cd.length<6){toast('代碼至少 6 碼');return}
+    if(cd.length<8){toast('私密代碼至少 8 碼 — 按「🔒 換一個」自動產生');return}
     localStorage.setItem(KEY+'_fb',JSON.stringify(c));localStorage.setItem(KEY+'_fbcode',cd);
     ov.remove();toast('已儲存 — 正在重新連線雲端…');setTimeout(function(){location.reload()},800);
   });
 }
 
+/* ---------- v75：分享單間店給朋友（點對點，各自地圖各自管） ---------- */
+$('#sharePinBtn').addEventListener('click',function(){
+  var p=S.pins.find(function(x){return x.id===S.editing});if(!p)return;
+  var base=location.href.split('#')[0];
+  var payload={n:p.name||'',a:p.addr||'',lat:p.lat,lng:p.lng,c:p.cat,note:p.note||''};
+  var code=btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  var txt='🍜 推薦這間：'+(p.name||'（未命名）')+'\n'+(p.addr?('📍 '+cleanAddr(p.addr)+'\n'):'')+'👇 打開連結，按「釘起來」就收進他的口袋地圖\n'+base+'#add='+code;
+  var done=function(){toast('✓ 分享文字已複製 — 直接貼給朋友（LINE/訊息）')};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,function(){window.prompt('複製失敗 — 請長按全選以下文字手動複製：',txt)});
+  else window.prompt('複製失敗 — 請長按全選以下文字手動複製：',txt);
+});
+function pinImportFromHash(){
+  var m=location.hash.match(/#add=([A-Za-z0-9\-_]+)/);if(!m)return;
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  var j=null;try{j=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))))}catch(e){}
+  if(!j||(!j.n&&!j.a&&j.lat==null))return;
+  setTimeout(function(){
+    openPin(null);
+    if(j.n)$('#fName').value=j.n;
+    if(j.a)$('#fAddr').value=cleanAddr(j.a);
+    if(j.lat!=null&&j.lng!=null)S.draft={lat:+j.lat,lng:+j.lng};
+    if(j.note)$('#fNote').value=j.note;
+    if(j.c){S.draftCat=j.c;renderCatChips(j.c)}
+    updateCoordTxt();
+    toast('朋友的推薦已幫你填好 — 確認後按「釘起來」');
+  },700);
+}
+
 /* ---------- 啟動 ---------- */
 load();
-if(fbInit()){fbStart();toast('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff0c\u4ee3\u78bc '+FB.code+'\uff09')}
-else{setTimeout(function(){toast('\u7248\u672c '+APP_VER+' \u2014 \u96f2\u7aef\u672a\u9023\u7dda\uff0c\u8acb\u56de\u5831\u52a9\u624b')},2000)}
+ensurePrivateCode(function(){
+  if(fbInit()){
+    fbStart();
+    toast(FB.code===DEFAULT_FBCODE?('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff09\u26a0\ufe0f \u516c\u958b\u4ee3\u78bc\uff0c\u5efa\u8b70\u9078\u55ae\u2192\u96f2\u7aef\u540c\u6b65\u8a2d\u5b9a\u63db\u79c1\u5bc6\u4ee3\u78bc'):('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff0c\u79c1\u5bc6\u4ee3\u78bc '+FB.code+'\uff09'));
+    /* 已換私密代碼的舊用戶：把公開的舊房間清乾淨（只做一次） */
+    if(FB.code!==DEFAULT_FBCODE&&!localStorage.getItem(KEY+'_fbclean')){
+      try{FB.db.ref('rooms/'+DEFAULT_FBCODE).remove();localStorage.setItem(KEY+'_fbclean','1')}catch(e){}
+    }
+  }
+  else{setTimeout(function(){toast('\u7248\u672c '+APP_VER+' \u2014 \u96f2\u7aef\u672a\u9023\u7dda\uff0c\u8acb\u56de\u5831\u52a9\u624b')},2000)}
+  pinImportFromHash();
+});
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
