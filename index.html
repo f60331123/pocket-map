@@ -2222,6 +2222,7 @@ function doPush(tok){
   .catch(function(e){var m=(e&&e.auth)?'auth':String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_lastSyncErr',m);if(e&&e.auth){autoReconnect()||authTip();return}setSync('err')});
 }
 function queuePush(){
+  if(typeof FB!=='undefined'&&FB.ready)return; /* v67：Firebase 接手，舊 Google 上傳停駛 */
   if(!S.user||pulling)return;
   clearTimeout(pushTimer);
   pushTimer=setTimeout(function(){
@@ -2233,6 +2234,7 @@ function queuePush(){
   },1000);
 }
 function syncPull(tok){
+  if(typeof FB!=='undefined'&&FB.ready)return; /* v67：Firebase 接手，舊 Google 同步停駛 */
   setSync('syncing');
   driveList(tok).then(function(gl){
     var f=gl&&gl.files&&gl.files[0];if(f)cloudFid=f.id;
@@ -2330,6 +2332,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
+var APP_VER='v67c';
 /* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
 var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
 var DEFAULT_FBCODE='K7X2MQ';
@@ -2419,7 +2422,8 @@ function fbSetup(){
 
 /* ---------- 啟動 ---------- */
 load();
-if(fbInit()){fbStart();toast('\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u5df2\u9023\u7dda\uff08\u4ee3\u78bc '+FB.code+'\uff09')}
+if(fbInit()){fbStart();toast('\u2601\ufe0f \u540c\u6b65\u5df2\u9023\u7dda\uff08'+APP_VER+'\uff0c\u4ee3\u78bc '+FB.code+'\uff09')}
+else{setTimeout(function(){toast('\u7248\u672c '+APP_VER+' \u2014 \u96f2\u7aef\u672a\u9023\u7dda\uff0c\u8acb\u56de\u5831\u52a9\u624b')},2000)}
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
