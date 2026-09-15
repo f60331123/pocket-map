@@ -2154,6 +2154,14 @@ function tryRefresh(){
   return refreshing;
 }
 function authTip(){setSync('err');if(!sessionStorage.getItem(KEY+'_authTip')){sessionStorage.setItem(KEY+'_authTip','1');toast('同步需要重新登入 — 點右上角頭像 →「登入 Google」')}}
+function autoReconnect(){
+  if(!(S.user&&S.user.email))return false;
+  if(sessionStorage.getItem(KEY+'_autoRe'))return false;
+  sessionStorage.setItem(KEY+'_autoRe','1');
+  toast('通行證過期 — 正在重新連結 Google 自動同步…');
+  setTimeout(function(){loginRedirectFlow()},1200);
+  return true;
+}
 function authExpired(){
   if(S.user&&S.user.rtok){tryRefresh().then(function(){if(S.user&&S.user.tok)syncPull(S.user.tok)}).catch(function(){doAuthRedirect()});return}
   doAuthRedirect();
@@ -2179,7 +2187,7 @@ function finishLoginCode(code,stVer){
     return gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+t.access_token}}).then(function(r){return r.json()}).then(function(u){
       S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'\u4f7f\u7528\u8005',email:(u&&u.email)||'',tok:t.access_token,rtok:t.refresh_token||(S.user&&S.user.rtok)||'',real:1};
       $('#avatarBtn').textContent=S.user.name.charAt(0);
-      sessionStorage.removeItem(KEY+'_reauth');
+      sessionStorage.removeItem(KEY+'_reauth');sessionStorage.removeItem(KEY+'_autoRe');
       persist();setSync('syncing');
       if(S.user.rtok)toast('\u767b\u5165\u5b8c\u6210\uff01\u4ee5\u5f8c\u81ea\u52d5\u540c\u6b65\uff0c\u4e0d\u7528\u518d\u91cd\u8907\u767b\u5165');
       syncPull(S.user.tok);
@@ -2212,7 +2220,7 @@ function doPush(tok){
     var f=gl&&gl.files&&gl.files[0];if(f)cloudFid=f.id;
     return driveSave(tok,f?f.id:null,payload);
   }).then(function(){localStorage.removeItem(KEY+'_lastSyncErr');localStorage.setItem(KEY+'_savedAt',String(Date.now()));setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}))})
-  .catch(function(e){var m=(e&&e.auth)?'auth':String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_lastSyncErr',m);if(e&&e.auth){authTip();return}setSync('err')});
+  .catch(function(e){var m=(e&&e.auth)?'auth':String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_lastSyncErr',m);if(e&&e.auth){autoReconnect()||authTip();return}setSync('err')});
 }
 function queuePush(){
   if(!S.user||pulling)return;
@@ -2221,7 +2229,8 @@ function queuePush(){
     if(pulling)return;
     var go=function(tk){if(tk)doPush(tk)};
     if(S.user.tok)go(S.user.tok);
-    else if(S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
+    else if(S.user.rtok)tryRefresh().then(go).catch(function(){autoReconnect()||authTip()});
+    else autoReconnect();
   },1000);
 }
 function syncPull(tok){
@@ -2246,7 +2255,7 @@ function syncPull(tok){
       setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));
       toast('已同步：共 '+merged.pins.length+' 家店（兩台合併，不會互相覆蓋）');
     });
-  }).catch(function(e){if(e&&e.auth){authTip();return}setSync('err')});
+  }).catch(function(e){if(e&&e.auth){autoReconnect()||authTip();return}setSync('err')});
 }
 $('#avatarBtn').addEventListener('click',function(){
   var existing=$('#meMenu');
@@ -2327,7 +2336,8 @@ setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
   if(S.user&&S.user.tok)go(S.user.tok);
-  else if(S.user&&S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
+  else if(S.user&&S.user.rtok)tryRefresh().then(go).catch(function(){autoReconnect()||authTip()});
+  else autoReconnect();
 },2000);
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
