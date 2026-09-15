@@ -1590,12 +1590,13 @@ $('#ocrFile').addEventListener('change',function(){
 function openOcrCrop(dataUrl,onOk,onCancel){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   ov.innerHTML='<div class="ceCard" style="max-width:560px"><h4>\u2702\ufe0f \u6846\u9078\u8981\u6293\u7684\u6587\u5b57</h4>'
-    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u6846\u597d\u5f8c\u6309\u300c\u78ba\u8a8d\u6846\u9078\u300d\uff0c\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u6846\u597d\u5f8c\u6309\u4e0b\u65b9\u7da0\u8272\u5927\u6309\u9215\u300c\u78ba\u8a8d\u6846\u9078\u4e26\u8b80\u53d6\u300d\u3002\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
     +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
-    +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">\u6846\u9078\u5f8c\u6703\u51fa\u73fe\u300c\u78ba\u8a8d\u6846\u9078\u300d\uff0c\u6309\u4e0b\u53bb\u624d\u6703\u958b\u59cb\u64f7\u53d6\u3002</div>'
-    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" id="ocConfirm" class="primary" disabled>\u78ba\u8a8d\u6846\u9078</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
+    +'<div id="ocState" style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">\u9084\u6c92\u6709\u6846\u9078\uff0c\u6846\u597d\u5f8c\u7da0\u8272\u6309\u9215\u6703\u4eae\u8d77\u4f86\u3002</div>'
+    +'<button type="button" id="ocConfirm" class="primary" disabled style="width:100%;margin-top:8px">\u78ba\u8a8d\u6846\u9078\u4e26\u8b80\u53d6</button>'
+    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
   document.body.appendChild(ov);
-  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap');
+  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap'),stateTxt=ov.querySelector('#ocState');
   var st=null,rect=null;
   function pos(e){var r=img.getBoundingClientRect();return{x:Math.min(Math.max(0,(e.clientX-r.left)/r.width),1),y:Math.min(Math.max(0,(e.clientY-r.top)/r.height),1)}}
   function draw(){if(!rect)return;var r=img.getBoundingClientRect();sel.style.display='block';sel.style.left=(rect.x0*r.width)+'px';sel.style.top=(rect.y0*r.height)+'px';sel.style.width=((rect.x1-rect.x0)*r.width)+'px';sel.style.height=((rect.y1-rect.y0)*r.height)+'px'}
@@ -1609,16 +1610,21 @@ function openOcrCrop(dataUrl,onOk,onCancel){
     var p=pos(e);rect.x1=p.x;rect.y1=p.y;
     rect.x0=Math.min(st.ax,rect.x1);rect.x1=Math.max(st.ax,rect.x1);
     rect.y0=Math.min(st.ay,rect.y1);rect.y1=Math.max(st.ay,rect.y1);
-    draw();go.disabled=false;okBtn.disabled=false;
+    draw();go.disabled=false;okBtn.disabled=false;stateTxt.textContent='已框選範圍，按上面的「確認框選並讀取」開始擷取';
   });
   function endDrag(){if(!st)return;st=null;
-    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true;okBtn.disabled=true}
+    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true;okBtn.disabled=true;stateTxt.textContent='框選太小，請再框一次'}
+    else if(rect){stateTxt.textContent='已框好，按上面的「確認框選並讀取」開始讀取'}
   }
   wrap.addEventListener('pointerup',endDrag);
   wrap.addEventListener('pointercancel',endDrag);
   ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
-  ov.querySelector('#ocFull').addEventListener('click',function(){toast('已送出整張圖片，開始辨識');ov.remove();onOk(dataUrl)});
-  okBtn.addEventListener('click',function(){if(!rect)return;toast('已確認框選，開始擷取');go.click()});
+  ov.querySelector('#ocFull').addEventListener('click',function(){
+    stateTxt.textContent='正在讀取整張圖片…';
+    okBtn.disabled=true;ov.querySelector('#ocFull').disabled=true;ov.querySelector('#ocCancel').disabled=true;
+    setTimeout(function(){ov.remove();onOk(dataUrl)},180);
+  });
+  okBtn.addEventListener('click',function(){if(!rect)return;stateTxt.textContent='已確認框選，正在讀取圖片…';okBtn.textContent='讀取中…';okBtn.disabled=true;go.click()});
   go.addEventListener('click',function(){
     if(!rect)return;
     var im=new Image();
@@ -1628,8 +1634,8 @@ function openOcrCrop(dataUrl,onOk,onCancel){
       var cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(sw*sc));cv.height=Math.max(1,Math.round(sh*sc));
       var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';
       cx.drawImage(im,sx,sy,sw,sh,0,0,cv.width,cv.height);
-      ov.remove();
-      onOk(cv.toDataURL('image/png'));
+      stateTxt.textContent='已擷取完成，開始辨識文字…';
+      setTimeout(function(){ov.remove();onOk(cv.toDataURL('image/png'))},180);
     };
     im.onerror=function(){ov.remove();onOk(dataUrl)};
     im.src=dataUrl;
