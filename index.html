@@ -2333,7 +2333,7 @@ document.addEventListener('click',function(e){
 /* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
 var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
 var DEFAULT_FBCODE='K7X2MQ';
-var FB={ready:false,db:null,code:'',applying:false,pulled:false,lastT:0};
+var FB={ready:false,db:null,code:'',applying:false,lastT:0,lastPushed:''};
 function fbCfgRaw(){return localStorage.getItem(KEY+'_fb')||JSON.stringify(DEFAULT_FB)}
 function fbCode(){return (localStorage.getItem(KEY+'_fbcode')||DEFAULT_FBCODE||'').toUpperCase()}
 function fbInit(){
@@ -2350,41 +2350,46 @@ function fbInit(){
 function fbNewCode(){var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<6;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPush(){
   if(!FB.ready||FB.applying)return;
-  var d=stateData();delete d.user;d._t=Date.now();FB.lastT=d._t;
+  var d=stateData();delete d.user;
+  var j=JSON.stringify(d);
+  if(j===FB.lastPushed)return;
+  FB.lastPushed=j;
+  d._t=Date.now();FB.lastT=d._t;
   FB.db.ref('rooms/'+FB.code).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
 }
-function fbMerge(d){
-  FB.applying=true;var changed=false;
+/* v67：雲端為準，整包套用 — 刪除、改名、顏色、分類增減全部同步 */
+function fbApply(d,silent){
+  FB.applying=true;
   try{
-    var before=JSON.stringify(stateData());
-    var merged=stateData();var byId={};
-    (merged.pins||[]).forEach(function(p){byId[p.id]=p});
-    ((d&&d.pins)||[]).forEach(function(p){var o=byId[p.id];if(!o||((+(p.updated||p.created||0))>(+(o.updated||o.created||0))))byId[p.id]=p});
-    merged.pins=Object.keys(byId).map(function(k){return byId[k]});
-    var cc={};(merged.customCats||[]).forEach(function(c){cc[c.id]=c});((d&&d.customCats)||[]).forEach(function(c){cc[c.id]=c});
-    merged.customCats=Object.keys(cc).map(function(k){return cc[k]});
-    if(!d.user)delete merged.user;
-    if(JSON.stringify(merged)!==before){
-      changed=true;
-      applyState(merged);persist();renderAll();renderFolderChips();renderCatChips();
-      toast('雲端已更新：共 '+merged.pins.length+' 家店');
-    }
+    var dd=JSON.parse(JSON.stringify(d));delete dd._t;delete dd.user;
+    applyState(dd);
+    FB.lastPushed=JSON.stringify(dd);FB.lastT=+(d._t||Date.now());
+    try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}
+    renderAll();renderFolderChips();renderCatChips();
+    if(!silent)toast('雲端已同步更新');
   }finally{FB.applying=false}
-  return changed;
 }
 function fbListen(){
   if(!FB.ready)return;
   FB.db.ref('rooms/'+FB.code).on('value',function(s){
     var d=s.val();if(!d||FB.applying)return;
     if(d._t&&FB.lastT&&d._t<=FB.lastT)return;
-    fbMerge(d);
+    var j=JSON.stringify((function(){var x=JSON.parse(JSON.stringify(d));delete x._t;delete x.user;return x})());
+    if(j===FB.lastPushed){FB.lastT=+(d._t||0);return}
+    fbApply(d);
   },function(e){toast('雲端連線失敗：'+(e&&e.message||e))});
 }
 function fbStart(){
   if(!FB.ready)return;
   FB.db.ref('rooms/'+FB.code).once('value').then(function(s){
     var d=s.val();
-    if(d&&((d.pins||[]).length||0)>0)fbMerge(d);
+    if(d){
+      /* 雲端為準，但保留「本機離線期間新釘」的店（created 比雲端時間戳新且雲端沒有） */
+      var ct=+(d._t||0);var cids={};(d.pins||[]).forEach(function(p){cids[p.id]=1});
+      var local=(S.pins||[]).filter(function(p){return !cids[p.id]&&(+(p.created||0))>ct});
+      if(local.length){d.pins=(d.pins||[]).concat(local)}
+      fbApply(d,true);
+    }
     fbPush();fbListen();
   }).catch(function(){fbPush();fbListen()});
 }
