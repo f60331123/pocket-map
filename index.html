@@ -672,6 +672,7 @@ var BASE_CATS=[
  {id:'na',name:'未分類',color:'#8C9186'}
 ];
 var KEY='pocketPins.demo.v1';
+try{localStorage.setItem(KEY+'_t','1');localStorage.removeItem(KEY+'_t')}catch(e){setTimeout(function(){var d=document.createElement('div');d.style.cssText='position:fixed;left:12px;right:12px;bottom:80px;z-index:99999;background:#C62828;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';d.innerHTML='<b>\u26a0\ufe0f \u4f60\u73fe\u5728\u958b\u7684\u662f\u300c\u79c1\u5bc6\u700f\u89bd\u300d</b><br>\u9019\u500b\u6a21\u5f0f\u4e0b\u767b\u5165\u3001\u5730\u9ede\u90fd\u6703\u4e0d\u898b\uff01\u8acb\u95dc\u6389\uff0c\u56de\u5230\u6b63\u5e38\u6a21\u5f0f\u91cd\u65b0\u958b\u9019\u500b\u7db2\u5740\u3002';document.body.appendChild(d);setTimeout(function(){d.remove()},10000)},1500)}
 var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[]};
 
 function catAll(){
