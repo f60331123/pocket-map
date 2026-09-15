@@ -2215,9 +2215,14 @@ function doPush(tok){
   .catch(function(e){var m=(e&&e.auth)?'auth':String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_lastSyncErr',m);if(e&&e.auth){authTip();return}setSync('err')});
 }
 function queuePush(){
-  if(!S.user||!S.user.tok||pulling)return;
+  if(!S.user||pulling)return;
   clearTimeout(pushTimer);
-  pushTimer=setTimeout(function(){doPush(S.user.tok)},2500);
+  pushTimer=setTimeout(function(){
+    if(pulling)return;
+    var go=function(tk){if(tk)doPush(tk)};
+    if(S.user.tok)go(S.user.tok);
+    else if(S.user.rtok)tryRefresh().then(go).catch(function(){authTip()});
+  },1000);
 }
 function syncPull(tok){
   setSync('syncing');
