@@ -1594,7 +1594,7 @@ function openOcrCrop(dataUrl,onOk,onCancel){
     +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
     +'<div id="ocState" style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">\u9084\u6c92\u6709\u6846\u9078\uff0c\u6846\u597d\u5f8c\u7da0\u8272\u6309\u9215\u6703\u4eae\u8d77\u4f86\u3002</div>'
     +'<button type="button" id="ocConfirm" class="primary" disabled style="width:100%;margin-top:8px">\u78ba\u8a8d\u6846\u9078\u4e26\u8b80\u53d6</button>'
-    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
+    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
   document.body.appendChild(ov);
   var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap'),stateTxt=ov.querySelector('#ocState');
   var st=null,rect=null;
@@ -1619,11 +1619,6 @@ function openOcrCrop(dataUrl,onOk,onCancel){
   wrap.addEventListener('pointerup',endDrag);
   wrap.addEventListener('pointercancel',endDrag);
   ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
-  ov.querySelector('#ocFull').addEventListener('click',function(){
-    stateTxt.textContent='正在讀取整張圖片…';
-    okBtn.disabled=true;ov.querySelector('#ocFull').disabled=true;ov.querySelector('#ocCancel').disabled=true;
-    setTimeout(function(){ov.remove();onOk(dataUrl)},180);
-  });
   okBtn.addEventListener('click',function(){if(!rect)return;stateTxt.textContent='已確認框選，正在讀取圖片…';okBtn.textContent='讀取中…';okBtn.disabled=true;go.click()});
   go.addEventListener('click',function(){
     if(!rect)return;
@@ -2469,7 +2464,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v101';
+var APP_VER='v103';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
