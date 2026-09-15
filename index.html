@@ -2403,7 +2403,7 @@ $('#avatarBtn').addEventListener('click',function(e){
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
   document.querySelector('#mPersonal').addEventListener('click',function(){m.remove();if(S.sharedRoom)wsSwitch('',function(){toast('已切回個人地圖')});else toast('現在就是在你的個人地圖')});
-  document.querySelector('#mAddWs').addEventListener('click',function(){m.remove();wsQuickAdd()});
+  document.querySelector('#mAddWs').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();m.remove();setTimeout(function(){wsQuickAdd()},0)});
   renderAcctUI();
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
@@ -2463,7 +2463,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v94';
+var APP_VER='v95';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2895,21 +2895,22 @@ function wsJoinPrompt(onDone){
   });
 }
 function wsQuickAdd(onDone){
-  if(!AUTH.user){toast('先登入才能建立共用地圖（選單 → 登入）');return}
   var rooms=wsRooms();
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   ov.innerHTML='<div class="ceCard"><h4>新增 / 加入共用地圖</h4>'
     +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">你可以自己創一張新的共用地圖，或輸入朋友給你的邀請碼加入。每一張共用地圖都會自動生一組隨機 8 碼邀請碼，不用自己想代碼。</div>'
-    +'<div style="display:grid;gap:8px;margin-top:10px">'
+    +(!AUTH.user?'<div style="font-size:12px;line-height:1.7;color:#B3351E;text-align:left;margin-top:8px">要建立或加入共用地圖前，請先用 Google 登入。</div><button type="button" id="wsLoginFirst" class="primary" style="width:100%;margin-top:10px">先登入 Google</button>':'<div style="display:grid;gap:8px;margin-top:10px">'
     +'<button type="button" class="suggRow" id="wsMakeMine" style="justify-content:flex-start"><span>✨</span><span style="text-align:left"><b>自己創一張</b><br><small style="color:var(--ink2)">建立後立刻可以改名字，再把邀請碼傳給朋友</small></span></button>'
     +'<button type="button" class="suggRow" id="wsUseFriend" style="justify-content:flex-start"><span>🤝</span><span style="text-align:left"><b>加入朋友的</b><br><small style="color:var(--ink2)">貼上朋友給你的 8 碼邀請碼</small></span></button>'
-    +'</div><div class="ceBtns"><button type="button" id="wsAddCancel">取消</button></div></div>';
+    +'</div>')
+    +'<div class="ceBtns"><button type="button" id="wsAddCancel">取消</button></div></div>';
   document.body.appendChild(ov);
   document.getElementById('wsAddCancel').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
   ov.addEventListener('click',function(e){if(e.target===ov){ov.remove();if(onDone)onDone()}});
-  document.getElementById('wsMakeMine').addEventListener('click',function(){ov.remove();wsCreateRoomFlow(onDone)});
-  document.getElementById('wsUseFriend').addEventListener('click',function(){ov.remove();wsJoinPrompt(onDone)});
+  var lf=document.getElementById('wsLoginFirst');if(lf)lf.addEventListener('click',function(){ov.remove();acctUI()});
+  var mk=document.getElementById('wsMakeMine');if(mk)mk.addEventListener('click',function(){ov.remove();wsCreateRoomFlow(onDone)});
+  var uf=document.getElementById('wsUseFriend');if(uf)uf.addEventListener('click',function(){ov.remove();wsJoinPrompt(onDone)});
 }
 function wsNamePrompt(code,onDone){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
