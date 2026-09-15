@@ -123,7 +123,7 @@ header{
 .chip.dragging,.catChip.dragging{opacity:.9;box-shadow:0 6px 16px rgba(35,40,31,.28);transform:scale(1.07);z-index:5;position:relative}
 #chipEditOverlay{position:fixed;inset:0;background:rgba(30,32,26,.45);z-index:3000;display:flex;align-items:flex-end;justify-content:center}
 #chipEditOverlay .ceCard{background:#fff;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:420px;box-shadow:0 -8px 30px rgba(0,0,0,.2)}
-@media(min-width:641px){#chipEditOverlay{align-items:center}#chipEditOverlay .ceCard{border-radius:16px}}
+@media(min-width:641px){#chipEditOverlay{align-items:flex-end}#chipEditOverlay .ceCard{border-radius:16px 16px 0 0;max-width:460px}}
 #chipEditOverlay h4{margin:0 0 10px;font-size:15px}
 #chipEditOverlay .ceRow{display:flex;gap:8px;margin-top:10px;align-items:center}
 #chipEditOverlay .ceBtns{display:flex;gap:8px;margin-top:14px}
@@ -2392,7 +2392,7 @@ $('#avatarBtn').addEventListener('click',function(e){
   this.parentElement.style.position='relative';
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
   m.innerHTML='<button id="mFb">登入</button><div id="mSyncRow" style="font-size:11.5px;color:#8A8674;padding:2px 4px 8px;text-align:left"></div><button id="mPersonal">個人地圖</button>'
-    +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:42px;text-align:center;font-size:18px;flex:none" title="新增共用地圖（最多5個）">＋</button></div>'
+    +'<button id="mShared">共用地圖 / 新增或加入</button>'
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
@@ -2403,7 +2403,6 @@ $('#avatarBtn').addEventListener('click',function(e){
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
   document.querySelector('#mPersonal').addEventListener('click',function(){m.remove();if(S.sharedRoom)wsSwitch('',function(){toast('已切回個人地圖')});else toast('現在就是在你的個人地圖')});
-  document.querySelector('#mAddWs').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();m.remove();setTimeout(function(){wsQuickAdd()},0)});
   renderAcctUI();
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
@@ -2463,7 +2462,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v95';
+var APP_VER='v97';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2933,7 +2932,15 @@ function wsNamePrompt(code,onDone){
 function sharedUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   function render(){
-    if(!AUTH.user){ov.remove();toast('先登入才可以用共用地圖（選單 → 登入）');return}
+    if(!AUTH.user){
+      ov.innerHTML='<div class="ceCard"><h4>共用地圖</h4>'
+        +'<div style="font-size:12.5px;line-height:1.75;color:var(--ink2);text-align:left">先用 Google 登入，才可以自己建立共用地圖，或輸入朋友給你的邀請碼加入。</div>'
+        +'<button type="button" id="wsNeedLogin" class="primary" style="width:100%;margin-top:12px">先登入 Google</button>'
+        +'<div class="ceBtns"><button type="button" id="wsClose">關閉</button></div></div>';
+      document.getElementById('wsClose').addEventListener('click',function(){ov.remove()});
+      document.getElementById('wsNeedLogin').addEventListener('click',function(){ov.remove();acctUI()});
+      return;
+    }
     var rooms=wsRooms();
     var h='<div class="ceCard"><h4>共用地圖</h4>';
     h+='<div style="text-align:left"><button type="button" class="suggRow" id="wsMe" style="width:100%;justify-content:flex-start'+(S.sharedRoom?';opacity:.75':';outline:2px solid #7B9E6B')+'"><span>🏠</span><span style="text-align:left"><b>個人地圖'+(S.sharedRoom?'':'（使用中）')+'</b><br><small style="color:var(--ink2)">只有你看得到的那份</small></span></button></div>';
