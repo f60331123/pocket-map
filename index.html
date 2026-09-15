@@ -1571,9 +1571,63 @@ $('#ocrFile').addEventListener('change',function(){
   oh('讀取圖片中…');
   var rd=new FileReader();
   rd.onload=function(){
+    openOcrCrop(rd.result,function(cropped){ocrRun(cropped,oh)},function(){oh('已取消 — 重選圖片可再框選')});
+  };
+  rd.onerror=function(){ocrBusy=false;oh('圖片讀取失敗')};
+  rd.readAsDataURL(f);
+});
+/* v72：先框選要抓的文字範圍，避開雜亂背景 — 辨識成功率大幅提升 */
+function openOcrCrop(dataUrl,onOk,onCancel){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard" style="max-width:560px"><h4>\u2702\ufe0f \u6846\u9078\u8981\u6293\u7684\u6587\u5b57</h4>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
+    +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
+    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" id="ocFull">\u8fa8\u8b58\u6574\u5f35</button><button type="button" class="primary" id="ocGo" disabled>\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
+  document.body.appendChild(ov);
+  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),wrap=ov.querySelector('#ocWrap');
+  var st=null,rect=null;
+  function pos(e){var r=img.getBoundingClientRect();return{x:Math.min(Math.max(0,(e.clientX-r.left)/r.width),1),y:Math.min(Math.max(0,(e.clientY-r.top)/r.height),1)}}
+  function draw(){if(!rect)return;var r=img.getBoundingClientRect();sel.style.display='block';sel.style.left=(rect.x0*r.width)+'px';sel.style.top=(rect.y0*r.height)+'px';sel.style.width=((rect.x1-rect.x0)*r.width)+'px';sel.style.height=((rect.y1-rect.y0)*r.height)+'px'}
+  wrap.addEventListener('pointerdown',function(e){
+    if(e.button>0)return;e.preventDefault();
+    var p=pos(e);st={ax:p.x,ay:p.y};rect={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
+    try{wrap.setPointerCapture(e.pointerId)}catch(err){}
+  });
+  wrap.addEventListener('pointermove',function(e){
+    if(!st)return;e.preventDefault();
+    var p=pos(e);rect.x1=p.x;rect.y1=p.y;
+    rect.x0=Math.min(st.ax,rect.x1);rect.x1=Math.max(st.ax,rect.x1);
+    rect.y0=Math.min(st.ay,rect.y1);rect.y1=Math.max(st.ay,rect.y1);
+    draw();go.disabled=false;
+  });
+  function endDrag(){if(!st)return;st=null;
+    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true}
+  }
+  wrap.addEventListener('pointerup',endDrag);
+  wrap.addEventListener('pointercancel',endDrag);
+  ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
+  ov.querySelector('#ocFull').addEventListener('click',function(){ov.remove();onOk(dataUrl)});
+  go.addEventListener('click',function(){
+    if(!rect)return;
+    var im=new Image();
+    im.onload=function(){
+      var sx=rect.x0*im.width,sy=rect.y0*im.height,sw=(rect.x1-rect.x0)*im.width,sh=(rect.y1-rect.y0)*im.height;
+      var sc=Math.min(4,Math.max(1.5,2000/Math.max(1,sw)));
+      var cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(sw*sc));cv.height=Math.max(1,Math.round(sh*sc));
+      var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';
+      cx.drawImage(im,sx,sy,sw,sh,0,0,cv.width,cv.height);
+      ov.remove();
+      onOk(cv.toDataURL('image/png'));
+    };
+    im.onerror=function(){ov.remove();onOk(dataUrl)};
+    im.src=dataUrl;
+  });
+}
+function ocrRun(src,oh){
+  ocrBusy=true;var lastPrep=null;
     oh('準備中文辨識引擎…（第一次要下載約 2MB 模型，之後就快了）');
     function ocrPrep(dataUrl){return new Promise(function(res){var im=new Image();im.onload=function(){try{var cv=document.createElement('canvas'),sc=Math.min(2.2,2600/Math.max(1,im.width));cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(im,0,0,cv.width,cv.height);var u=cv.toDataURL('image/png');lastPrep=u;res(u)}catch(e){res(dataUrl)}};im.onerror=function(){res(dataUrl)};im.src=dataUrl})}
-    function recog(src){return ocrPrep(src).then(function(prep){return Tesseract.recognize(prep||src,'chi_tra',{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
+    function recog(srcd){return ocrPrep(srcd).then(function(prep){return Tesseract.recognize(prep||srcd,'chi_tra',{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
     function finish(lines,rawTxt,dropped,boost){
       ocrBusy=false;
       ocrOut={clean:lines.join('\n'),raw:rawTxt,lastLbl:''};
@@ -1587,12 +1641,12 @@ $('#ocrFile').addEventListener('change',function(){
     }
     var run=function(){
       try{
-        recog(rd.result).then(function(r){
+        recog(src).then(function(r){
           var raw1=(r.data&&r.data.text)||'',p1=ocrCleanLines(raw1);
           var isAddrL=function(l){return /\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l)};
           if(p1.lines.some(isAddrL)||p1.raw.join('').length>=200)return finish(p1.lines,raw1,p1.dropped,false);
           oh('畫面像白字疊照片 — 白字強化辨識中…（多花幾秒）');
-          ocrInvert(lastPrep||rd.result,function(prepUrl){
+          ocrInvert(lastPrep||src,function(prepUrl){
             if(!prepUrl)return finish(p1.lines,raw1,p1.dropped,false);
             recog(prepUrl).then(function(r2){
               var p2=ocrCleanLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
@@ -1614,12 +1668,8 @@ $('#ocrFile').addEventListener('change',function(){
       js.onerror=function(){ocrBusy=false;oh('連不上辨識服務（這個網路有封鎖？）稍後再試')};
       document.head.appendChild(js);
     }
-  };
-  rd.onerror=function(){ocrBusy=false;oh('圖片讀取失敗')};
-  rd.readAsDataURL(f);
-});
+}
 $('#ocrRawBtn').addEventListener('click',function(){
-  if(!ocrOut.raw)return;
   var ta=$('#fText');
   if(ta.value===ocrOut.raw){ta.value=ocrOut.clean;this.textContent=ocrOut.lastLbl||'看原始文字'}
   else{ocrOut.lastLbl=this.textContent;ta.value=ocrOut.raw;this.textContent='回到清洗後文字'}
@@ -2352,7 +2402,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v71';
+var APP_VER='v72';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
