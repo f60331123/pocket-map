@@ -2170,7 +2170,7 @@ function finishLoginCode(code){
       if(S.user.rtok)toast('\u767b\u5165\u5b8c\u6210\uff01\u4ee5\u5f8c\u6191\u8b49\u904e\u671f\u6703\u81ea\u52d5\u7e8c\u671f\uff0c\u4e0d\u518d\u53eb\u4f60\u91cd\u8907\u767b\u5165');
       syncPull(S.user.tok);
     });
-  }).catch(function(){toast('Google \u767b\u5165\u4ea4\u63db\u5931\u6557\uff0c\u8acb\u518d\u8a66\u4e00\u6b21');setSync('err')});
+  }).catch(function(e){localStorage.setItem(KEY+'_loginErr',String((e&&e.message)||e||'unknown'));toast('Google \u767b\u5165\u4ea4\u63db\u5931\u6557\uff1a'+localStorage.getItem(KEY+'_loginErr')+' — \u622a\u5716\u7d66\u52a9\u624b\u4fee');setSync('err')});
 }
 function logoutGoogle(){
   var t=S.user&&S.user.tok;
@@ -2255,7 +2255,9 @@ function syncDiag(){
   $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else if(S.user&&S.user.email){toast('登入通行證過期了 — 正在幫你重新登入…');authExpired()}else{toast('先登入 Google，再回來按檢查')}});
   var b=$('#sdBody');
   b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?(esc(S.user.email)+'（已登入）'+((S.user&&S.user.tok)?'':'<br><b style="color:#C33">但登入通行證已過期 — 這就是不同步的原因，按「立即同步」會自動重登</b>')):'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
-    +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店';
+    +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店'
+    +'<br>長期憑證：'+((S.user&&S.user.rtok)?'\u2705 已拿到（以後可自動續期）':'\u274c 還沒拿到 — 登入時要完整走完授權畫面')
+    +'<br>上次錯誤：'+(localStorage.getItem(KEY+'_loginErr')?esc(localStorage.getItem(KEY+'_loginErr')):'（無）');
   if(!(S.user&&S.user.tok))return;
   gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+S.user.tok}})
   .then(function(r){return r.json()}).then(function(gl){
@@ -2304,8 +2306,8 @@ document.addEventListener('click',function(e){
 load();
 enterApp();
 if(S.user&&S.user.tok)setTimeout(function(){try{syncPull(S.user.tok)}catch(e){}},400);
-else if(S.user&&S.user.email)setTimeout(function(){try{authExpired()}catch(e){}},600);
-document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.user&&S.user.email&&!pulling)setTimeout(function(){try{S.user.tok?syncPull(S.user.tok):authExpired()}catch(e){}},300)});
+else if(S.user&&S.user.email)setSync('err');
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.user&&S.user.tok&&!pulling)setTimeout(function(){try{syncPull(S.user.tok)}catch(e){}},300)});
 
 if(S.user&&S.user.real)setSync('local');
 (function(){try{var q=new URLSearchParams(location.search);var cd=q.get('code');if(cd){history.replaceState(null,'',location.pathname);finishLoginCode(cd);return}}catch(e){}})();
