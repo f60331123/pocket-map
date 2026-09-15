@@ -648,6 +648,8 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
 <div id="toast" role="status"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
 .pinwrap{background:none;border:none}
@@ -700,7 +702,7 @@ function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+c
 function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.user)S.user=d.user;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder}
 function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}}
 function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,user:S.user,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder}}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}if(typeof queuePush==='function')queuePush()}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}if(typeof queuePush==='function')queuePush();if(!FB.applying&&typeof fbPush==='function'&&FB.ready)fbPush()}
 if(!Array.isArray(S.folders))S.folders=[];
 function hostOf(u){try{return new URL(u).hostname}catch(e){return u}}
 
@@ -2265,13 +2267,14 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u8a2d\u5b9a\uff08Firebase\uff09</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
   document.querySelector('#mSyncDiag').addEventListener('click',function(){m.remove();syncDiag()});
+  document.querySelector('#mFb').addEventListener('click',function(){m.remove();fbSetup()});
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
 });
@@ -2330,8 +2333,78 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
+/* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
+var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
+var DEFAULT_FBCODE='K7X2MQ';
+var FB={ready:false,db:null,code:'',applying:false};
+function fbCfgRaw(){return localStorage.getItem(KEY+'_fb')||JSON.stringify(DEFAULT_FB)}
+function fbCode(){return (localStorage.getItem(KEY+'_fbcode')||DEFAULT_FBCODE||'').toUpperCase()}
+function fbInit(){
+  var raw=fbCfgRaw();
+  if(!raw||!window.firebase)return false;
+  try{
+    var c=JSON.parse(raw);
+    if(!c||!c.databaseURL)return false;
+    firebase.initializeApp(c);
+    FB.db=firebase.database();FB.code=fbCode();FB.ready=!!FB.code;
+    return FB.ready;
+  }catch(e){return false}
+}
+function fbNewCode(){var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<6;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
+function fbPush(){
+  if(!FB.ready||FB.applying)return;
+  var d=stateData();delete d.user;d._t=Date.now();
+  FB.db.ref('rooms/'+FB.code).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
+}
+function fbMerge(d){
+  FB.applying=true;
+  try{
+    var merged=stateData();var byId={};
+    (merged.pins||[]).forEach(function(p){byId[p.id]=p});
+    ((d&&d.pins)||[]).forEach(function(p){var o=byId[p.id];if(!o||((+(p.updated||p.created||0))>(+(o.updated||o.created||0))))byId[p.id]=p});
+    merged.pins=Object.keys(byId).map(function(k){return byId[k]});
+    var cc={};(merged.customCats||[]).forEach(function(c){cc[c.id]=c});((d&&d.customCats)||[]).forEach(function(c){cc[c.id]=c});
+    merged.customCats=Object.keys(cc).map(function(k){return cc[k]});
+    if(!d.user)delete merged.user;
+    applyState(merged);persist();renderAll();renderFolderChips();renderCatChips();
+    toast('雲端已更新：共 '+merged.pins.length+' 家店');
+  }finally{FB.applying=false}
+}
+function fbListen(){
+  if(!FB.ready)return;
+  FB.db.ref('rooms/'+FB.code).on('value',function(s){
+    var d=s.val();if(!d||FB.applying)return;
+    var n=(d.pins||[]).length;
+    if(n!==S.pins.length)fbMerge(d);
+  },function(e){toast('雲端連線失敗：'+(e&&e.message||e))});
+}
+function fbSetup(){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var cur=fbCfgRaw(),code=fbCode();
+  ov.innerHTML='<div class="ceCard"><h4>\u2601\ufe0f 雲端同步設定（Firebase）</h4>'
+    +'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left">✅ 雲端設定已內建，<b>不用再貼 firebaseConfig</b> — 只要把兩台裝置的「同步代碼」填成同一個即可。下方設定留給進階玩家（可換成自己的 Firebase）。</div>'
+    +'<textarea class="txt" id="fbCfg" rows="5" style="width:100%;font-size:12px;margin-top:8px" placeholder="貼上 firebaseConfig 整串">{}</textarea>'
+    +'<div style="font-size:12.5px;color:var(--ink2);margin-top:6px;text-align:left">同步代碼（兩台裝置填同一個）：</div>'
+    +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="fbCode" value="'+escAttr(code)+'" style="flex:1;text-transform:uppercase" placeholder="6碼代碼"><button type="button" id="fbGen" style="white-space:nowrap">換一個</button></div>'
+    +'<div class="ceBtns">'+(cur?'<button type="button" class="danger" id="fbDel">移除設定</button>':'')+'<button type="button" id="fbCancel">取消</button><button type="button" class="primary" id="fbSave">儲存並連線</button></div></div>';
+  document.body.appendChild(ov);
+  if(cur)document.getElementById('fbCfg').value=cur;
+  document.getElementById('fbGen').addEventListener('click',function(){document.getElementById('fbCode').value=fbNewCode()});
+  document.getElementById('fbCancel').addEventListener('click',function(){ov.remove()});
+  if(cur)document.getElementById('fbDel').addEventListener('click',function(){localStorage.removeItem(KEY+'_fb');localStorage.removeItem(KEY+'_fbcode');toast('已移除 Firebase 設定 — 請更新 App 後生效');ov.remove()});
+  document.getElementById('fbSave').addEventListener('click',function(){
+    var raw=document.getElementById('fbCfg').value.trim().replace(/^[^{]*/,'').replace(/[^}]*$/,'');
+    var cd=(document.getElementById('fbCode').value.trim()||fbNewCode()).toUpperCase();
+    try{var c=JSON.parse(raw);if(!c||!c.databaseURL)throw 0}catch(e){toast('設定格式不對 — 要貼完整的 firebaseConfig（含 databaseURL）');return}
+    if(cd.length<6){toast('代碼至少 6 碼');return}
+    localStorage.setItem(KEY+'_fb',JSON.stringify(c));localStorage.setItem(KEY+'_fbcode',cd);
+    ov.remove();toast('已儲存 — 正在重新連線雲端…');setTimeout(function(){location.reload()},800);
+  });
+}
+
 /* ---------- 啟動 ---------- */
 load();
+if(fbInit()){fbPush();fbListen();toast('\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u5df2\u9023\u7dda\uff08\u4ee3\u78bc '+FB.code+'\uff09')}
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
