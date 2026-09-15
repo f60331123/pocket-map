@@ -2355,7 +2355,7 @@ function syncPull(tok){
   }).catch(function(e){if(e&&e.auth){autoReconnect()||authTip();return}setSync('err')});
 }
 $('#avatarBtn').addEventListener('click',function(e){
-  if(e.target.closest('.avPen')){acctUI();return}
+  if(e.target.closest('.avPen')){avEditUI();return}
   var existing=$('#meMenu');
   if(existing){existing.remove();return}
   this.parentElement.style.position='relative';
@@ -2432,7 +2432,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v85';
+var APP_VER='v86';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2571,10 +2571,9 @@ function renderAvatar(){
 function avColorGet(){return localStorage.getItem(KEY+'_avc')||''}
 function avImgGet(){return localStorage.getItem(KEY+'_avi')||''}
 function avEditUI(){
-  if(!AUTH.user){toast('先登入才能換頭像');return}
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   var img=avImgGet(),col=avColorGet()||'#7B9E6B';
-  var ch=(AUTH.user.email||'我').charAt(0).toUpperCase();
+  var ch=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'我';
   ov.innerHTML='<div class="ceCard"><h4>更換頭像</h4>'
     +'<div style="text-align:center;margin:6px 0 2px"><div id="avPrev" style="width:72px;height:72px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;overflow:hidden;'+(img?'':'background:'+col)+'">'+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover">':escAttr(ch))+'</div></div>'
     +'<div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">'
@@ -2583,6 +2582,7 @@ function avEditUI(){
     +'<div class="ceBtns" style="margin-top:12px"><button type="button" id="avImgRm2" class="'+(img?'danger':'')+'" style="'+(img?'':'display:none')+'">移除圖片</button><button type="button" id="avCancel">取消</button><button type="button" id="avImgBtn2" class="primary">選擇圖片</button></div>'
     +'<div style="font-size:11.5px;color:#8A8674;margin-top:4px;text-align:center">照片會自動裁成正方形剛好放進圓形頭像</div></div>';
   document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove()});
   var prev=document.getElementById('avPrev');
   function refresh(sel){
     var im2=avImgGet(),c2=avColorGet()||'#7B9E6B';
@@ -2835,15 +2835,17 @@ function wsQuickAdd(){
   var rooms=wsRooms();
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
   var code=fbNewCode(8);
+  rooms.push({code:code});wsSaveRooms(rooms);
   FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
-      rooms.push({code:code});wsSaveRooms(rooms);
     wsSwitch(code,function(){toast('✓ 已建立（'+rooms.length+'/5）— 邀請碼：'+code);wsNamePrompt(code)});
-  }).catch(function(){toast('建立失敗，檢查網路再試')});
+  }).catch(function(e){
+    toast('已加入清單，但雲端開房失敗：'+((e&&e.message)||e)+' — 若寫 permission denied，要去 Firebase 控制台更新資料庫規則');
+  });
 }
 function wsNamePrompt(code,onDone){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   ov.innerHTML='<div class="ceCard"><h4>為共用地圖取個名字</h4>'
-    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left">最多 6 個字 — 字越多會自動縮小，清單上一排都看得清楚</div>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left">最多6個字</div>'
     +'<input class="txt" id="wsNm" maxlength="6" placeholder="例如：跟阿嬌的" style="width:100%;margin-top:8px;font-size:16px">'
     +'<div style="text-align:center;margin-top:8px;color:var(--ink2)"><span style="font-size:11px">清單長這樣 → </span><span id="wsNmPrev" style="font-weight:900;color:var(--ink)">預覽</span></div>'
     +'<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:10px">邀請碼（傳給朋友，他在「共用地圖」貼上加入）：</div>'
@@ -2902,10 +2904,10 @@ function sharedUI(){
     var nb=document.getElementById('wsNew');
     if(nb)nb.addEventListener('click',function(){
       var code=fbNewCode(8);
+      var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);render();
       FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
-        var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);
         wsSwitch(code,function(){render();wsNamePrompt(code)});
-      }).catch(function(){toast('建立失敗，檢查網路再試')});
+      }).catch(function(e){toast('已加入清單，但雲端開房失敗：'+((e&&e.message)||e))});
     });
   }
   render();document.body.appendChild(ov);
