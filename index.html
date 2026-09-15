@@ -682,7 +682,9 @@ var BASE_CATS=[
 ];
 var KEY='pocketPins.demo.v1';
 try{localStorage.setItem(KEY+'_t','1');localStorage.removeItem(KEY+'_t')}catch(e){setTimeout(function(){var d=document.createElement('div');d.style.cssText='position:fixed;left:12px;right:12px;bottom:80px;z-index:99999;background:#C62828;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';d.innerHTML='<b>\u26a0\ufe0f \u4f60\u73fe\u5728\u958b\u7684\u662f\u300c\u79c1\u5bc6\u700f\u89bd\u300d</b><br>\u9019\u500b\u6a21\u5f0f\u4e0b\u767b\u5165\u3001\u5730\u9ede\u90fd\u6703\u4e0d\u898b\uff01\u8acb\u95dc\u6389\uff0c\u56de\u5230\u6b63\u5e38\u6a21\u5f0f\u91cd\u65b0\u958b\u9019\u500b\u7db2\u5740\u3002';document.body.appendChild(d);setTimeout(function(){d.remove()},10000)},1500)}
-var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{}};
+var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{},avatarColor:'',avatarImage:''};
+function lastEmailGet(){try{return localStorage.getItem(KEY+'_lastEmail')||''}catch(e){return ''}}
+function lastEmailSet(v){try{if(v)localStorage.setItem(KEY+'_lastEmail',v)}catch(e){}}
 
 function catAll(includeHidden){
   var arr=BASE_CATS.filter(function(c){return includeHidden||S.hiddenCats.indexOf(c.id)<0}).map(function(c){
@@ -706,9 +708,9 @@ function pinFill(p){return S.pinColorMode==='status'?stColor(p.status):catColor(
 function hslToHex(h,s,l){s/=100;l/=100;var k=function(n){return (n+h/30)%12},a=s*Math.min(l,1-l),f=function(n){return l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)))};return '#'+[f(0),f(8),f(4)].map(function(x){var v=Math.round(255*x).toString(16);return v.length<2?'0'+v:v}).join('')}
 function normHex(c){if(c&&c.charAt(0)==='#')return c;var m=String(c).match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);return m?hslToHex(+m[1],+m[2],+m[3]):'#888888'}
 function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+ch.codePointAt(0))%360});return 'hsl('+h+',42%,44%)'}
-function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.user)S.user=d.user;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
+function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if('avatarColor' in d)S.avatarColor=d.avatarColor||'';if('avatarImage' in d)S.avatarImage=d.avatarImage||'';if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
 function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}if(!S.trash)S.trash={};S.sharedRoom=localStorage.getItem(KEY+'_ws')||'';S.shareView=localStorage.getItem(KEY+'_sv')==='1'}
-function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,user:S.user,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{}}}
+function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{},avatarColor:S.avatarColor||'',avatarImage:S.avatarImage||''}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()));localStorage.setItem(KEY+'_ws',S.sharedRoom||'');localStorage.setItem(KEY+'_sv',S.shareView?'1':'0')}catch(e){}if(typeof queuePush==='function')queuePush();if(!FB.applying&&typeof fbPush==='function'&&FB.ready)fbPush()}
 if(!Array.isArray(S.folders))S.folders=[];
 function hostOf(u){try{return new URL(u).hostname}catch(e){return u}}
@@ -2203,8 +2205,14 @@ function askCsec(after){
   if(ov)ov.insertAdjacentHTML('beforeend','<div style="font-size:12px;color:#8A8674;margin-top:10px">貼上「用戶端密碼」：Google Cloud Console → API 和服務 → 憑證 → 點你的 OAuth 用戶端 → 右側「用戶端密碼」按複製。</div>');
 }
 function setSync(st,extra){
-  var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'僅存本機（登入後自動同步）'}[st]||''}
-  var r=document.querySelector('#mSyncRow');if(r)r.textContent=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'僅存本機',off:'未同步（僅本機）'})[st]||'';
+  var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'訪客模式（資料只在這台裝置）',guest:'訪客模式（尚未登入）'}[st]||''}
+  var r=document.querySelector('#mSyncRow');
+  if(r){
+    var au=(typeof AUTH!=='undefined'&&AUTH.user)?AUTH.user:null;
+    var base=au?('已登入 '+(au.email||'')+(S.sharedRoom?'｜共用地圖 '+S.sharedRoom:'｜個人地圖')):(lastEmailGet()?('訪客模式｜上次帳號 '+lastEmailGet()):'訪客模式');
+    var tail=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'資料只在這台裝置',guest:'尚未登入',off:'未同步（僅本機）'})[st]||'';
+    r.textContent=base+(tail?('｜'+tail):'');
+  }
 }
 function loadGsi(cb){
   if(window.google&&google.accounts&&google.accounts.oauth2)return cb();
@@ -2360,7 +2368,7 @@ $('#avatarBtn').addEventListener('click',function(e){
   if(existing){existing.remove();return}
   this.parentElement.style.position='relative';
   var m=document.createElement('div');m.id='meMenu';m.className='menu';
-  m.innerHTML='<button id="mFb">登入</button><button id="mPersonal">個人地圖</button>'
+  m.innerHTML='<button id="mFb">登入</button><div id="mSyncRow" style="font-size:11.5px;color:#8A8674;padding:2px 4px 8px;text-align:left"></div><button id="mPersonal">個人地圖</button>'
     +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:42px;text-align:center;font-size:18px;flex:none" title="新增共用地圖（最多5個）">＋</button></div>'
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
@@ -2420,7 +2428,7 @@ function importBackup(file){
       if(!d||!Array.isArray(d.pins))throw new Error('bad');
       if(!window.confirm('還原會覆蓋目前全部資料（現在 '+S.pins.length+' 家 → 備份檔 '+d.pins.length+' 家），確定？'))return;
       applyState(d);persist();renderAll();renderFolderChips();renderCatChips();
-      $('#avatarBtn').textContent=((S.user&&S.user.name)||'訪').charAt(0);
+      renderAvatar();
       toast('已還原 '+S.pins.length+' 家店');
     }catch(e){toast('備份檔讀取失敗（格式不對？）')}
   };
@@ -2432,7 +2440,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v86';
+var APP_VER='v87';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2480,67 +2488,49 @@ function fbInit(){
 var AUTH={user:null};
 function authStart(){
   if(!window.firebase||!firebase.auth)return;
+  try{firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE).catch(function(){})}catch(e){}
   firebase.auth().onAuthStateChanged(function(u){
     AUTH.user=u;
     renderAcctUI();
     if(u){
+      lastEmailSet(u.email||'');
       FB.path='users/'+u.uid;FB.code=u.email;FB.ready=true;FB.lastPushed='';FB.lastT=0;
-      fbStart();
-      toast('✉️ 已用 '+u.email+' 登入 — 這是專屬於你的口袋地圖');
+      fbStart();fbProfilePull();setSync('syncing');
+      toast('✅ 已用 Google 登入：'+u.email);
     }else{
-      FB.ready=false;FB.path='';
-      setTimeout(function(){toast('🔐 尚未登入 — 這台的地圖只存在本機，選單裡「帳號與同步」登入後才會雲端同步')},1800);
+      if(FB.ref){FB.ref.off();FB.ref=null}
+      FB.ready=false;FB.path='';FB.lastPushed='';FB.lastT=0;
+      setSync((S.pins&&S.pins.length)?'local':'guest');
+      setTimeout(function(){toast('👀 目前是訪客模式 — 新開頁面不會自動登入，要同步時再用 Google 登入')},1200);
     }
   });
 }
 function acctUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
-  var u=AUTH.user;
-  ov.innerHTML='<div class="ceCard"><h4>登入</h4>'
+  var u=AUTH.user,last=lastEmailGet();
+  ov.innerHTML='<div class="ceCard"><h4>'+(u?'帳號':'登入 Google')+'</h4>'
     +(u
-      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">✨ 你的專屬口袋開張啦！換手機登進來，店店們會乖乖排隊回來找你 🍜</span></div>'
-      +'<div class="ceBtns"><button type="button" id="avEdit" class="primary" style="width:100%">更換頭像</button><button type="button" id="acOut" class="danger" style="width:100%;margin-top:6px">登出</button></div>'
-      :'<div style="font-size:12.5px;line-height:1.7;color:var(--ink2);text-align:left"></div>'
-        +'<div style="margin-top:8px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">信箱</div><input class="txt" id="acEmail" type="email" placeholder="you@example.com" style="width:100%"></div>'
-        +'<div style="margin-top:6px;text-align:left"><div style="font-size:12.5px;color:var(--ink2)">密碼（至少 6 碼）</div><input class="txt" id="acPass" type="password" placeholder="" style="width:100%"></div>'
-        +'<button type="button" id="acGoogle" class="primary" style="width:100%;background:#fff;color:#3c4043;border:1.5px solid var(--line);margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c-6.6 0-12-5.4-12-12s5.4-12 12-12z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>用 Google 登入</button>'
-        +'<div style="font-size:11.5px;color:#8A8674;margin:8px 0 2px;text-align:center">— 或用信箱密碼 —</div>'
-        +'<div class="ceBtns"><button type="button" id="acReset" style="font-size:12px">忘記密碼</button><button type="button" id="acCancel">取消</button><button type="button" class="primary" id="acGo">登入 / 註冊</button></div>'
-        +'<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">同一組信箱密碼，幾台裝置登入都會同步。第一次填的信箱密碼就是註冊。</div>')
+      ?'<div style="font-size:13.5px;line-height:1.8;text-align:left">✅ 已登入：<b>'+escAttr(u.email)+'</b><br><span style="font-size:12.5px;color:var(--ink2)">這一頁關掉，或新開一頁時，會回到訪客模式；這台只記住上次登入帳號提示，不會自動登入。</span></div>'
+       +'<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:8px">目前位置：<b style="color:var(--ink)">'+(S.sharedRoom?('共用地圖 '+escAttr(S.sharedRoom)):'個人地圖')+'</b></div>'
+       +'<div class="ceBtns" style="margin-top:12px"><button type="button" id="acOut" class="danger" style="width:100%">登出</button><button type="button" id="acClose">關閉</button></div>'
+      :'<div style="font-size:12.5px;line-height:1.75;color:var(--ink2);text-align:left">目前是訪客模式。新開頁面不會自動登入；要同步分類、地圖和頭像時，再用 Google 登入。'+(last?'<br><span style="font-size:12px;color:var(--ink)">上次這台登入：<b>'+escAttr(last)+'</b>（只記提示，不會自動登入）</span>':'')+'</div>'
+       +'<button type="button" id="acGoogle" class="primary" style="width:100%;background:#fff;color:#3c4043;border:1.5px solid var(--line);margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.3 6 29.4 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c-6.6 0-12-5.4-12-12s5.4-12 12-12z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.7l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>用 Google 登入</button>'
+       +'<div class="ceBtns"><button type="button" id="acCancel">取消</button></div>')
     +'</div>';
   document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove()});
   var cc=document.getElementById('acCancel');if(cc)cc.addEventListener('click',function(){ov.remove()});
-  var cc2=document.getElementById('acClose2');if(cc2)cc2.addEventListener('click',function(){ov.remove()});
-  var ae=document.getElementById('avEdit');
-  if(ae)ae.addEventListener('click',function(){ov.remove();avEditUI()});
+  var cc2=document.getElementById('acClose');if(cc2)cc2.addEventListener('click',function(){ov.remove()});
   if(u){document.getElementById('acOut').addEventListener('click',function(){
     var btn=this;btn.disabled=true;btn.textContent='登出中…';
-    firebase.auth().signOut().then(function(){ov.remove();renderAcctUI();toast('已登出 — 資料還在這台裝置本機')}).catch(function(e){btn.disabled=false;btn.textContent='登出';toast('登出失敗：'+((e&&e.message)||'未知錯誤'))});
+    firebase.auth().signOut().then(function(){ov.remove();renderAcctUI();toast('已登出 — 關掉後下次會從訪客模式開始')}).catch(function(e){btn.disabled=false;btn.textContent='登出';toast('登出失敗：'+((e&&e.message)||'未知錯誤'))});
   });return}
-  document.getElementById('acGo').addEventListener('click',function(){
-    var em=document.getElementById('acEmail').value.trim(),pw=document.getElementById('acPass').value;
-    if(!/^\S+@\S+\.\S+$/.test(em)){toast('信箱格式不對');return}
-    if(pw.length<6){toast('密碼至少 6 碼');return}
-    var btn=this;btn.disabled=true;btn.textContent='連線中…';
-    firebase.auth().signInWithEmailAndPassword(em,pw).then(function(){ov.remove()}).catch(function(e){
-      var code=(e&&e.code)||'';
-      if(code.indexOf('user-not-found')>=0||code.indexOf('invalid-credential')>=0||code.indexOf('wrong-password')>=0||code.indexOf('invalid-login-credentials')>=0){
-        firebase.auth().createUserWithEmailAndPassword(em,pw).then(function(){ov.remove()}).catch(function(e2){
-          btn.disabled=false;btn.textContent='登入 / 註冊';
-          toast('註冊失敗：'+((e2&&e2.message)||'未知錯誤'));
-        });
-      }else if(code.indexOf('invalid-email')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('信箱格式不對')}
-      else if(code.indexOf('too-many-requests')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('嘗試太多次，等一下再試')}
-      else if(code.indexOf('email-already-in-use')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('這個信箱已註冊過 — 密碼打原本那組，或按「忘記密碼」')}
-      else if(code.indexOf('operation-not-allowed')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('雲端還沒開啟「Email 登入」— Firebase 控制台 → Authentication → Sign-in method → 啟用電子郵件/密碼')}
-      else if(code.indexOf('network')>=0){btn.disabled=false;btn.textContent='登入 / 註冊';toast('連不上登入服務，檢查網路')}
-      else{btn.disabled=false;btn.textContent='登入 / 註冊';toast('登入失敗：'+((e&&e.message)||'未知錯誤'))}
-    });
-  });
   document.getElementById('acGoogle').addEventListener('click',function(){
     var btn=this;btn.disabled=true;btn.textContent='連線中…';
     var p=new firebase.auth.GoogleAuthProvider();
-    firebase.auth().signInWithPopup(p).then(function(){ov.remove()}).catch(function(e){
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE).then(function(){
+      return firebase.auth().signInWithPopup(p);
+    }).then(function(){ov.remove()}).catch(function(e){
       var code=(e&&e.code)||'';
       if(code==='auth/popup-blocked'||code==='auth/cancelled-popup-request'||code==='auth/popup-closed-by-user'){
         firebase.auth().signInWithRedirect(p).catch(function(){btn.disabled=false;btn.textContent='用 Google 登入'});
@@ -2549,11 +2539,6 @@ function acctUI(){
       else if(code.indexOf('unauthorized-domain')>=0){btn.disabled=false;btn.textContent='用 Google 登入';toast('網域還沒授權 — Authentication → Settings → Authorized domains → 加入 f60331123.github.io')}
       else{btn.disabled=false;btn.textContent='用 Google 登入';toast('Google 登入失敗：'+((e&&e.message)||'未知錯誤'))}
     });
-  });
-  document.getElementById('acReset').addEventListener('click',function(){
-    var em=document.getElementById('acEmail').value.trim();
-    if(!/^\S+@\S+\.\S+$/.test(em)){toast('先填信箱再按忘記密碼');return}
-    firebase.auth().sendPasswordResetEmail(em).then(function(){toast('重設密碼的信寄出了 — 去信箱收信')}).catch(function(){toast('寄送失敗 — 這個信箱可能還沒註冊過')});
   });
 }
 function renderAvatar(){
@@ -2568,33 +2553,39 @@ function renderAvatar(){
   if(!AUTH.user)b.style.removeProperty('background');
   b.insertAdjacentHTML('beforeend',pen);
 }
-function avColorGet(){return localStorage.getItem(KEY+'_avc')||''}
-function avImgGet(){return localStorage.getItem(KEY+'_avi')||''}
+function avColorGet(){return S.avatarColor||''}
+function avImgGet(){return S.avatarImage||''}
 function avEditUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
-  var img=avImgGet(),col=avColorGet()||'#7B9E6B';
-  var ch=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'我';
+  var draftImg=avImgGet(),draftCol=avColorGet()||'#7B9E6B';
+  var ch=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'訪';
   ov.innerHTML='<div class="ceCard"><h4>更換頭像</h4>'
-    +'<div style="text-align:center;margin:6px 0 2px"><div id="avPrev" style="width:72px;height:72px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;overflow:hidden;'+(img?'':'background:'+col)+'">'+(img?'<img src="'+img+'" style="width:100%;height:100%;object-fit:cover">':escAttr(ch))+'</div></div>'
+    +'<div style="text-align:center;margin:6px 0 2px"><div id="avPrev" style="width:72px;height:72px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;overflow:hidden">'+escAttr(ch)+'</div></div>'
     +'<div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">'
-    +['#E8A87C','#D97B7B','#8FB98F','#7BA6D9','#B08BD9','#E8C46C','#7B9E9E','#9E7B7B'].map(function(c){return '<button type="button" data-avc="'+c+'" style="width:30px;height:30px;border-radius:50%;background:'+c+';border:3px solid '+(!img&&col===c?'#3c4043':'#fff')+';box-shadow:0 0 0 1px #D8D4C6"></button>'}).join('')
+    +['#E8A87C','#D97B7B','#8FB98F','#7BA6D9','#B08BD9','#E8C46C','#7B9E9E','#9E7B7B'].map(function(c){return '<button type="button" data-avc="'+c+'" style="width:30px;height:30px;border-radius:50%;background:'+c+';border:3px solid #fff;box-shadow:0 0 0 1px #D8D4C6"></button>'}).join('')
     +'</div>'
-    +'<div class="ceBtns" style="margin-top:12px"><button type="button" id="avImgRm2" class="'+(img?'danger':'')+'" style="'+(img?'':'display:none')+'">移除圖片</button><button type="button" id="avCancel">取消</button><button type="button" id="avImgBtn2" class="primary">選擇圖片</button></div>'
-    +'<div style="font-size:11.5px;color:#8A8674;margin-top:4px;text-align:center">照片會自動裁成正方形剛好放進圓形頭像</div></div>';
+    +'<div class="ceBtns" style="margin-top:12px"><button type="button" id="avImgRm2">移除圖片</button><button type="button" id="avCancel">取消</button><button type="button" class="primary" id="avSave">儲存</button></div>'
+    +'<div class="ceBtns" style="margin-top:6px"><button type="button" id="avImgBtn2" class="primary" style="width:100%">選擇圖片</button></div>'
+    +'<div style="font-size:11.5px;color:#8A8674;margin-top:4px;text-align:center">照片會自動裁成正方形剛好放進圓形頭像；按「儲存」才會正式套用與同步。</div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove()});
-  var prev=document.getElementById('avPrev');
-  function refresh(sel){
-    var im2=avImgGet(),c2=avColorGet()||'#7B9E6B';
-    prev.innerHTML=im2?'<img src="'+im2+'" style="width:100%;height:100%;object-fit:cover">':escAttr(ch);
-    prev.style.background=im2?'':c2;
-    ov.querySelectorAll('[data-avc]').forEach(function(b){b.style.borderColor=(!im2&&b.dataset.avc===c2)?'#3c4043':'#fff'});
+  var prev=document.getElementById('avPrev'),rmBtn=document.getElementById('avImgRm2');
+  function refresh(){
+    prev.innerHTML=draftImg?'<img src="'+draftImg+'" style="width:100%;height:100%;object-fit:cover">':escAttr(ch);
+    prev.style.background=draftImg?'':draftCol;
+    ov.querySelectorAll('[data-avc]').forEach(function(b){b.style.borderColor=(!draftImg&&b.dataset.avc===draftCol)?'#3c4043':'#fff'});
+    rmBtn.style.display=draftImg?'':'none';
+    rmBtn.className=draftImg?'danger':'';
   }
-  ov.querySelectorAll('[data-avc]').forEach(function(b){b.addEventListener('click',function(){
-    localStorage.setItem(KEY+'_avc',b.dataset.avc);localStorage.removeItem(KEY+'_avi');
-    renderAvatar();refresh();
-  })});
+  refresh();
+  ov.querySelectorAll('[data-avc]').forEach(function(b){b.addEventListener('click',function(){draftCol=b.dataset.avc;draftImg='';refresh()})});
   document.getElementById('avCancel').addEventListener('click',function(){ov.remove()});
+  document.getElementById('avSave').addEventListener('click',function(){
+    S.avatarColor=draftCol;S.avatarImage=draftImg||'';
+    persist();renderAvatar();ov.remove();
+    if(AUTH.user)fbProfilePush();
+    toast(AUTH.user?'頭像已儲存並同步':'頭像已儲存（這台裝置）');
+  });
   document.getElementById('avImgBtn2').addEventListener('click',function(){
     var fi=document.createElement('input');fi.type='file';fi.accept='image/*';
     fi.onchange=function(){
@@ -2606,10 +2597,8 @@ function avEditUI(){
           var cv=document.createElement('canvas');cv.width=cv.height=160;
           var cx=cv.getContext('2d');var s=Math.min(im.width,im.height);
           cx.drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,160,160);
-          var du;try{du=cv.toDataURL('image/jpeg',0.82)}catch(e){toast('這張圖片處理失敗，換一張試試');return}
-          try{localStorage.setItem(KEY+'_avi',du)}catch(e){toast('圖片太大存不進去，換小一點的');return}
-          renderAvatar();refresh();toast('頭像換好了 📸');
-          var rm=document.getElementById('avImgRm2');if(rm){rm.style.display='';rm.classList.add('danger')}
+          try{draftImg=cv.toDataURL('image/jpeg',0.82)}catch(e){toast('這張圖片處理失敗，換一張試試');return}
+          refresh();
         };
         im.onerror=function(){toast('這張圖片讀不出來，換一張試試')};
         im.src=rd.result;
@@ -2618,18 +2607,33 @@ function avEditUI(){
     };
     fi.click();
   });
-  document.getElementById('avImgRm2').addEventListener('click',function(){localStorage.removeItem(KEY+'_avi');renderAvatar();refresh();this.style.display='none';this.classList.remove('danger');toast('已移除圖片，改用顏色頭像')});
+  rmBtn.addEventListener('click',function(){draftImg='';refresh()});
 }
 function renderAcctUI(){
-  var r2=document.querySelector('#mFb');if(r2)r2.textContent=AUTH.user?'登出':'登入';
+  var r2=document.querySelector('#mFb');if(r2)r2.textContent=AUTH.user?'帳號':'登入';
   renderAvatar();
+  setSync(AUTH.user?'syncing':((S.pins&&S.pins.length)?'local':'guest'));
+}
+function fbProfilePush(){
+  if(!FB.db||!AUTH.user)return;
+  FB.db.ref('users/'+AUTH.user.uid+'/__profile').set({avatarColor:S.avatarColor||'',avatarImage:S.avatarImage||'',updated:Date.now()}).catch(function(e){toast('頭像同步失敗：'+((e&&e.message)||e))});
+}
+function fbProfilePull(){
+  if(!FB.db||!AUTH.user)return;
+  FB.db.ref('users/'+AUTH.user.uid+'/__profile').once('value').then(function(s){
+    var d=s.val()||{};
+    if('avatarColor' in d)S.avatarColor=d.avatarColor||'';
+    if('avatarImage' in d)S.avatarImage=d.avatarImage||'';
+    try{localStorage.setItem(KEY,JSON.stringify(stateData()))}catch(e){}
+    renderAvatar();
+  }).catch(function(){});
 }
 function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPath(){return (AUTH.user&&S.sharedRoom)?('shared/'+S.sharedRoom):('users/'+AUTH.user.uid)}
 function fbPushForce(){FB.lastPushed='';if(FB.ready)fbPush()}
 function fbPush(){
   if(!FB.ready||!AUTH.user||FB.applying)return;
-  var d=stateData();delete d.user;
+  var d=stateData();delete d.user;delete d.avatarColor;delete d.avatarImage;
   var j=JSON.stringify(d);
   if(j===FB.lastPushed)return;
   FB.lastPushed=j;
