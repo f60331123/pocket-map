@@ -675,7 +675,7 @@ var BASE_CATS=[
 ];
 var KEY='pocketPins.demo.v1';
 try{localStorage.setItem(KEY+'_t','1');localStorage.removeItem(KEY+'_t')}catch(e){setTimeout(function(){var d=document.createElement('div');d.style.cssText='position:fixed;left:12px;right:12px;bottom:80px;z-index:99999;background:#C62828;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';d.innerHTML='<b>\u26a0\ufe0f \u4f60\u73fe\u5728\u958b\u7684\u662f\u300c\u79c1\u5bc6\u700f\u89bd\u300d</b><br>\u9019\u500b\u6a21\u5f0f\u4e0b\u767b\u5165\u3001\u5730\u9ede\u90fd\u6703\u4e0d\u898b\uff01\u8acb\u95dc\u6389\uff0c\u56de\u5230\u6b63\u5e38\u6a21\u5f0f\u91cd\u65b0\u958b\u9019\u500b\u7db2\u5740\u3002';document.body.appendChild(d);setTimeout(function(){d.remove()},10000)},1500)}
-var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[]};
+var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{}};
 
 function catAll(){
   var arr=BASE_CATS.filter(function(c){return S.hiddenCats.indexOf(c.id)<0}).map(function(c){
@@ -699,9 +699,9 @@ function pinFill(p){return S.pinColorMode==='status'?stColor(p.status):catColor(
 function hslToHex(h,s,l){s/=100;l/=100;var k=function(n){return (n+h/30)%12},a=s*Math.min(l,1-l),f=function(n){return l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)))};return '#'+[f(0),f(8),f(4)].map(function(x){var v=Math.round(255*x).toString(16);return v.length<2?'0'+v:v}).join('')}
 function normHex(c){if(c&&c.charAt(0)==='#')return c;var m=String(c).match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);return m?hslToHex(+m[1],+m[2],+m[3]):'#888888'}
 function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+ch.codePointAt(0))%360});return 'hsl('+h+',42%,44%)'}
-function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.user)S.user=d.user;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder}
-function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}}
-function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,user:S.user,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder}}
+function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.user)S.user=d.user;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
+function load(){try{applyState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}if(!S.trash)S.trash={}}
+function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,user:S.user,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{}}}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}if(typeof queuePush==='function')queuePush();if(!FB.applying&&typeof fbPush==='function'&&FB.ready)fbPush()}
 if(!Array.isArray(S.folders))S.folders=[];
 function hostOf(u){try{return new URL(u).hostname}catch(e){return u}}
@@ -1915,6 +1915,8 @@ function renderPageEditor(){
 $('#addPageBtn').addEventListener('click',function(){if(!S.editPages)S.editPages=[];if(S.editPages.length>=3){toast('最多 3 頁');return}S.editPages.push('');renderPageEditor()});
 $('#delBtn').addEventListener('click',function(){
   if(!delArm){delArm=true;this.textContent='再按一次確認刪除';var self=this;setTimeout(function(){delArm=false;self.textContent='刪除這筆紀錄'},2500);return}
+  var tp=S.pins.find(function(x){return x.id===S.editing});
+  if(tp){S.trash[S.editing]=Date.now()}
   S.pins=S.pins.filter(function(x){return x.id!==S.editing});
   persist();renderAll();closePin();toast('已刪除');
 });
@@ -2332,7 +2334,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v67c';
+var APP_VER='v68';
 /* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
 var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
 var DEFAULT_FBCODE='K7X2MQ';
@@ -2365,12 +2367,20 @@ function fbApply(d,silent){
   FB.applying=true;
   try{
     var dd=JSON.parse(JSON.stringify(d));delete dd._t;delete dd.user;
+    var inTrash=S.trash||{};var cids={};
+    if(Array.isArray(dd.pins))dd.pins=dd.pins.filter(function(p){ /* 墓碑過濾：本機或雲端記錄過「已刪」的店，一律不留 */
+      if(inTrash[p.id]&&inTrash[p.id]>=(+(p.updated||p.created||0)))return false;
+      if(dd.trash&&dd.trash[p.id]&&dd.trash[p.id]>=(+(p.updated||p.created||0)))return false;
+      return true;
+    });
     applyState(dd);
-    FB.lastPushed=JSON.stringify(dd);FB.lastT=+(d._t||Date.now());
+    FB.lastPushed=JSON.stringify((function(){var x=stateData();delete x.user;delete x.trash;return x})());
+    FB.lastT=+(d._t||Date.now());
     try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}
     renderAll();renderFolderChips();renderCatChips();
     if(!silent)toast('雲端已同步更新');
   }finally{FB.applying=false}
+  setTimeout(function(){if(FB.ready)fbPush()},500);
 }
 function fbListen(){
   if(!FB.ready)return;
@@ -2387,11 +2397,13 @@ function fbStart(){
   FB.db.ref('rooms/'+FB.code).once('value').then(function(s){
     var d=s.val();
     if(d){
-      /* 雲端為準，但保留「本機離線期間新釘」的店（created 比雲端時間戳新且雲端沒有） */
       var ct=+(d._t||0);var cids={};(d.pins||[]).forEach(function(p){cids[p.id]=1});
       var local=(S.pins||[]).filter(function(p){return !cids[p.id]&&(+(p.created||0))>ct});
-      if(local.length){d.pins=(d.pins||[]).concat(local)}
+      var oldTrash=S.trash||{};
       fbApply(d,true);
+      /* 本機離線期間新釘的店（且沒被刪過）補回來 */
+      local=local.filter(function(p){return !(S.trash&&S.trash[p.id])});
+      if(local.length){S.pins=S.pins.concat(local);try{localStorage.setItem(KEY,JSON.stringify(stateData()))}catch(e){}}
     }
     fbPush();fbListen();
   }).catch(function(){fbPush();fbListen()});
