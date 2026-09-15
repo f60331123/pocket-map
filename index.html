@@ -481,8 +481,8 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
       <div id="map"></div>
       <div id="mapLegend">
         <b>怎麼看圖釘</b>
-        <div class="lgRow"><span class="dot pinMini" style="--c:#1F7A6B"></span>（外圈）去過了</div>
-        <div class="lgRow"><span class="dot pinMini" style="--c:#E9A319"></span>（外圈）還沒去</div>
+        <div class="lgRow"><span class="dot pinMini" style="--c:#1F7A6B"></span>去過了</div>
+        <div class="lgRow"><span class="dot pinMini" style="--c:#E9A319"></span>還沒去</div>
         <div class="lgRow" style="margin-top:4px">中心點顏色 ＝ 分類 · 點圖釘看心得</div>
       </div>
       <div id="todoGeo" class="hide"></div>
@@ -1712,14 +1712,14 @@ function nomGeo(q){
       return {lat:r.lat,lon:r.lon,display_name:r.display_name+' 〖OSM 街級〗'};})});
 }
 var geoNetErr=false;
-function geocode(q){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';if(city&&q&&!/\u53f0\u5317\u5e02|\u65b0\u5317\u5e02|\u57fa\u9686\u5e02|\u6843\u5712\u5e02|\u53f0\u4e2d\u5e02|\u53f0\u5357\u5e02|\u9ad8\u96c4\u5e02|\u5e02|\u7e23/.test(q.slice(-6)))q=q+', '+city;
+function geocode(q){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';if(city&&q&&!/\u5e02|\u7e23/.test(q.slice(-6)))q=q+', '+city;
   geoNetErr=false;
-  return arcGeo(q).catch(function(){geoNetErr=true;return []}).then(function(a){
-    if(a.length)return normGeo(a);
-    var q2=q.replace(/\d+\s*號.*$/,'').trim();
-    var jobs=[nomGeo(q).catch(function(){return []}),photonGeo(q).catch(function(){return []})];
-    if(q2&&q2!==q)jobs.push(nomGeo(q2).catch(function(){return []}));
-    return Promise.all(jobs).then(function(rs){return normGeo(rs[0].concat(rs[1],rs[2]))});
+  var cjk=q.replace(/[^\u4e00-\u9fff]/g,'');
+  return Promise.all([arcGeo(q).catch(function(){geoNetErr=true;return[]}),nomGeo(q).catch(function(){return[]}),photonGeo(q).catch(function(){return[]})]).then(function(rs){
+    var all=normGeo(rs[0].concat(rs[1],rs[2]));
+    if(!cjk||!all.length)return all;
+    var hit=all.filter(function(r){var n=r.display_name.replace(/[^\u4e00-\u9fff]/g,'');if(!n)return false;if(cjk.length<2)return n.indexOf(cjk)>=0;for(var i=0;i+1<cjk.length;i++)if(n.indexOf(cjk.substr(i,2))>=0)return true;return false});
+    return hit.length?hit.concat(all.filter(function(r){return hit.indexOf(r)<0})):all;
   });
 }
 
@@ -1825,7 +1825,7 @@ $('#saveBtn').addEventListener('click',function(){
     var sel=$('#fCats .catChip.on');
     var data={
       name:name||hostOf(url),url:url,cat:sel?sel.dataset.id:'food',
-      status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
+      updated:Date.now(),status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
       price:priceVal(),pages:$$('#pagesBox textarea').map(function(t){return t.value.trim()}).filter(Boolean),pub:$('#fPub').checked,
       addr:cleanAddr($('#fAddr').value),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
     };
@@ -1904,7 +1904,7 @@ function loadSamples(){
 /* ---------- 圖例與顏色管理 ---------- */
 function renderLegend(){
   var el=$('#mapLegend');if(!el)return;
-  var lg=function(st){return '<div class="lgRow"><span class="dot pinMini" style="--c:'+S.statusColors[st]+'"></span>（外圈）'+(st==='done'?'去過了':'還沒去')+'</div>'};
+  var lg=function(st){return '<div class="lgRow"><span class="dot pinMini" style="--c:'+S.statusColors[st]+'"></span>'+(st==='done'?'去過了':'還沒去')+'</div>'};
   el.innerHTML='<b>怎麼看圖釘</b>'
     +lg('done')
     +lg('todo')
@@ -2138,16 +2138,20 @@ function syncPull(tok){
     if(!f){doPush(tok);return}
     return driveGet(tok,f.id).then(function(cloud){
       if(!cloud||!cloud.data||!Array.isArray(cloud.data.pins)){doPush(tok);return}
-      var cT=cloud.savedAt||0,lT=+(localStorage.getItem(KEY+'_savedAt')||0);
-      var localEmpty=!(S.pins&&S.pins.length)&&!(S.customCats&&S.customCats.length);
-      if(cT>lT+2000||(localEmpty&&cloud.data.pins.length)){
-        pulling=true;
-        applyState(cloud.data);persist();
-        renderAll();renderFolderChips();renderCatChips();
-        pulling=false;
-        setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));
-        toast('已從雲端還原 '+cloud.data.pins.length+' 家店');
-      }else doPush(tok);
+      pulling=true;
+      var merged=stateData();
+      var byId={};
+      (merged.pins||[]).forEach(function(p){byId[p.id]=p});
+      (cloud.data.pins||[]).forEach(function(p){var o=byId[p.id];if(!o||((+(p.updated||p.created||0))>(+(o.updated||o.created||0))))byId[p.id]=p});
+      merged.pins=Object.keys(byId).map(function(k){return byId[k]});
+      var cc={};(merged.customCats||[]).forEach(function(c){cc[c.id]=c});(cloud.data.customCats||[]).forEach(function(c){cc[c.id]=c});
+      merged.customCats=Object.keys(cc).map(function(k){return cc[k]});
+      applyState(merged);persist();
+      renderAll();renderFolderChips();renderCatChips();
+      pulling=false;
+      doPush(tok);
+      setSync('ok',new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}));
+      toast('已同步：共 '+merged.pins.length+' 家店（兩台合併，不會互相覆蓋）');
     });
   }).catch(function(){setSync('err')});
 }
