@@ -2333,7 +2333,7 @@ document.addEventListener('click',function(e){
 /* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
 var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
 var DEFAULT_FBCODE='K7X2MQ';
-var FB={ready:false,db:null,code:'',applying:false};
+var FB={ready:false,db:null,code:'',applying:false,pulled:false,lastT:0};
 function fbCfgRaw(){return localStorage.getItem(KEY+'_fb')||JSON.stringify(DEFAULT_FB)}
 function fbCode(){return (localStorage.getItem(KEY+'_fbcode')||DEFAULT_FBCODE||'').toUpperCase()}
 function fbInit(){
@@ -2350,12 +2350,13 @@ function fbInit(){
 function fbNewCode(){var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<6;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPush(){
   if(!FB.ready||FB.applying)return;
-  var d=stateData();delete d.user;d._t=Date.now();
+  var d=stateData();delete d.user;d._t=Date.now();FB.lastT=d._t;
   FB.db.ref('rooms/'+FB.code).set(d).catch(function(e){toast('雲端上傳失敗：'+(e&&e.message||e))});
 }
 function fbMerge(d){
-  FB.applying=true;
+  FB.applying=true;var changed=false;
   try{
+    var before=JSON.stringify(stateData());
     var merged=stateData();var byId={};
     (merged.pins||[]).forEach(function(p){byId[p.id]=p});
     ((d&&d.pins)||[]).forEach(function(p){var o=byId[p.id];if(!o||((+(p.updated||p.created||0))>(+(o.updated||o.created||0))))byId[p.id]=p});
@@ -2363,17 +2364,29 @@ function fbMerge(d){
     var cc={};(merged.customCats||[]).forEach(function(c){cc[c.id]=c});((d&&d.customCats)||[]).forEach(function(c){cc[c.id]=c});
     merged.customCats=Object.keys(cc).map(function(k){return cc[k]});
     if(!d.user)delete merged.user;
-    applyState(merged);persist();renderAll();renderFolderChips();renderCatChips();
-    toast('雲端已更新：共 '+merged.pins.length+' 家店');
+    if(JSON.stringify(merged)!==before){
+      changed=true;
+      applyState(merged);persist();renderAll();renderFolderChips();renderCatChips();
+      toast('雲端已更新：共 '+merged.pins.length+' 家店');
+    }
   }finally{FB.applying=false}
+  return changed;
 }
 function fbListen(){
   if(!FB.ready)return;
   FB.db.ref('rooms/'+FB.code).on('value',function(s){
     var d=s.val();if(!d||FB.applying)return;
-    var n=(d.pins||[]).length;
-    if(n!==S.pins.length)fbMerge(d);
+    if(d._t&&FB.lastT&&d._t<=FB.lastT)return;
+    fbMerge(d);
   },function(e){toast('雲端連線失敗：'+(e&&e.message||e))});
+}
+function fbStart(){
+  if(!FB.ready)return;
+  FB.db.ref('rooms/'+FB.code).once('value').then(function(s){
+    var d=s.val();
+    if(d&&((d.pins||[]).length||0)>0)fbMerge(d);
+    fbPush();fbListen();
+  }).catch(function(){fbPush();fbListen()});
 }
 function fbSetup(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
@@ -2401,7 +2414,7 @@ function fbSetup(){
 
 /* ---------- 啟動 ---------- */
 load();
-if(fbInit()){fbPush();fbListen();toast('\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u5df2\u9023\u7dda\uff08\u4ee3\u78bc '+FB.code+'\uff09')}
+if(fbInit()){fbStart();toast('\u2601\ufe0f \u96f2\u7aef\u540c\u6b65\u5df2\u9023\u7dda\uff08\u4ee3\u78bc '+FB.code+'\uff09')}
 setTimeout(function(){
   if(!(S.user&&S.user.email))return;
   var go=function(tk){if(tk)syncPull(tk)};
