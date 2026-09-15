@@ -677,8 +677,8 @@ var KEY='pocketPins.demo.v1';
 try{localStorage.setItem(KEY+'_t','1');localStorage.removeItem(KEY+'_t')}catch(e){setTimeout(function(){var d=document.createElement('div');d.style.cssText='position:fixed;left:12px;right:12px;bottom:80px;z-index:99999;background:#C62828;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';d.innerHTML='<b>\u26a0\ufe0f \u4f60\u73fe\u5728\u958b\u7684\u662f\u300c\u79c1\u5bc6\u700f\u89bd\u300d</b><br>\u9019\u500b\u6a21\u5f0f\u4e0b\u767b\u5165\u3001\u5730\u9ede\u90fd\u6703\u4e0d\u898b\uff01\u8acb\u95dc\u6389\uff0c\u56de\u5230\u6b63\u5e38\u6a21\u5f0f\u91cd\u65b0\u958b\u9019\u500b\u7db2\u5740\u3002';document.body.appendChild(d);setTimeout(function(){d.remove()},10000)},1500)}
 var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{}};
 
-function catAll(){
-  var arr=BASE_CATS.filter(function(c){return S.hiddenCats.indexOf(c.id)<0}).map(function(c){
+function catAll(includeHidden){
+  var arr=BASE_CATS.filter(function(c){return includeHidden||S.hiddenCats.indexOf(c.id)<0}).map(function(c){
     return{id:c.id,name:S.catNames[c.id]||c.name,color:S.catColors[c.id]||c.color};
   });
   arr=arr.concat(S.customCats.map(function(n){return{id:'c_'+n,name:n,color:S.catColors['c_'+n]||hashColor(n)}}));
@@ -1269,12 +1269,13 @@ function renderHearts(){
 }
 function paintHearts(n){$$('#fRating button').forEach(function(b,i){b.classList.toggle('on',i<n);b.innerHTML=I.heart(i<n)})}
 function renderCatChips(sel){
+  S.draftCat=sel||null;
   var box=$('#fCats');box.innerHTML='';
-  catAll().forEach(function(c){
+  catAll(true).forEach(function(c){
     var b=document.createElement('button');b.type='button';
     b.className='catChip'+(sel===c.id?' on':'');b.dataset.id=c.id;
     b.innerHTML='<span class="dot" style="--c:'+catColor(c.id)+'"></span>'+esc(c.name);
-    b.addEventListener('click',function(){$$('#fCats .catChip').forEach(function(x){x.classList.remove('on')});b.classList.add('on')});
+    b.addEventListener('click',function(){S.draftCat=c.id;$$('#fCats .catChip').forEach(function(x){x.classList.remove('on')});b.classList.add('on')});
     box.appendChild(b);
   });
   var add=document.createElement('button');add.type='button';add.className='catChip';
@@ -1768,6 +1769,23 @@ function revGeoName(lat,lng){
   return fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&location='+lng+','+lat)
     .then(function(r){return r.json()}).then(function(d){var a=d.address||{};return (a.Addr_type==='POI'&&a.PlaceName)?a.PlaceName:null}).catch(function(){return null});
 }
+/* v71：結果沒有路名時，用座標反查完整地址 */
+function revAddr(lat,lng){
+  return fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&location='+lng+','+lat+'&langCode=zh-TW')
+    .then(function(r){return r.json()}).then(function(d){var a=d.address||{};return a.Match_addr||a.Address||''}).catch(function(){return ''});
+}
+function addrWeak(s){return !/(路|街|巷|弄|大道|段|號)/.test(String(s||''))}
+function fillAddrSmart(r){
+  var fg=fmtGeo(r);
+  if(fg.addr)$('#fAddr').value=fg.addr;
+  if(addrWeak(fg.addr)&&r.lat!=null&&r.lon!=null){
+    $('#fAddr').value='地址查詢中…';
+    revAddr(+r.lat,+r.lon).then(function(a){
+      if(a){$('#fAddr').value=cleanAddr(a);toast('已自動補上地址')}
+      else $('#fAddr').value=fg.addr||'';
+    });
+  }
+}
 function nudgeSave(t){var b=$('#saveBtn');if(!b)return;b.classList.remove('glow');void b.offsetWidth;b.classList.add('glow');var el=t?$(t):b;if(el)el.scrollIntoView({behavior:'smooth',block:'center'})}
 function priceVal(){var v=$('#fPrice').value;return v==='__custom'?$('#fPriceCustom').value.trim():v}
 function stripUrl(s){return String(s||'').replace(/https?:\/\/\S+/gi,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim()}
@@ -1812,8 +1830,8 @@ $('#textParseBtn').addEventListener('click',function(){
         S.draft={lat:+(+item.r.lat).toFixed(6),lng:+(+item.r.lon).toFixed(6)};
         var used={};addr.slice(0,2).forEach(function(l){used[l]=1});if(shop[0])used[shop[0]]=1;
             var rest=lines.filter(function(l){return !used[l]&&l!==item.r.display_name&&!ocrJunkLine(l)}).join('\n');
-            var fg2=fmtGeo(item.r);
-            if(fg2.addr)$('#fAddr').value=fg2.addr;
+        var fg2=fmtGeo(item.r);
+            fillAddrSmart(item.r);
             if(!$('#fName').value.trim())$('#fName').value=fg2.name||shop[0]||'';
             if(!$('#fIntro').value.trim())$('#fIntro').value=stripUrl(rest);
         
@@ -1844,7 +1862,7 @@ function geoSearch(q){
       b.addEventListener('click',function(){
         S.draft={lat:+(+r.lat).toFixed(6),lng:+(+r.lon).toFixed(6)};
         var fg=fmtGeo(r);
-        if(fg.addr)$('#fAddr').value=fg.addr;
+        fillAddrSmart(r);
         if(fg.name&&!$('#fName').value.trim())$('#fName').value=fg.name;else if(!fg.name)revGeoName(+r.lat,+r.lng);
         nudgeSave('#fName');
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
@@ -1867,7 +1885,7 @@ $('#saveBtn').addEventListener('click',function(){
   function doSave(){
     var sel=$('#fCats .catChip.on');
     var data={
-      name:name||hostOf(url),url:url,cat:sel?sel.dataset.id:'food',
+      name:name||hostOf(url),url:url,cat:(S.draftCat||(sel?sel.dataset.id:'food')),
       updated:Date.now(),status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
       price:priceVal(),pages:$$('#pagesBox textarea').map(function(t){return t.value.trim()}).filter(Boolean),pub:$('#fPub').checked,
       addr:cleanAddr($('#fAddr').value),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
@@ -2334,7 +2352,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v70';
+var APP_VER='v71';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2412,7 +2430,7 @@ function fbApply(d,silent){
     FB.lastPushed=JSON.stringify((function(){var x=stateData();delete x.user;return x})());
     FB.lastT=+(d._t||Date.now());
     try{localStorage.setItem(KEY,JSON.stringify(stateData()));localStorage.setItem(KEY+'_savedAt',String(Date.now()))}catch(e){}
-    renderAll();renderFolderChips();renderCatChips();
+    renderAll();renderFolderChips();renderCatChips(S.draftCat);
     if(!silent)toast('雲端已同步更新');
   }finally{FB.applying=false}
   setTimeout(function(){if(FB.ready)fbPush()},500);
