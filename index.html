@@ -2334,7 +2334,33 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v68';
+var APP_VER='v69';
+/* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
+(function(){
+  var SWKEY='pocketPins.lv';
+  try{
+    var sv=fetch('https://raw.githubusercontent.com/f60331123/pocket-map/main/index.html',{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+      var m=t.match(/APP_VER='([^']+)'/);if(!m)return;
+      var remote=m[1];localStorage.setItem(SWKEY,remote);
+      if(remote!==APP_VER&&sessionStorage.getItem('pp_updn')!==remote){
+        sessionStorage.setItem('pp_updn',remote);
+        toast('🔄 發現新版 '+remote+' — 自動更新中…');
+        setTimeout(function(){location.reload(true)},1500);
+      }
+    }).catch(function(){});
+    /* 每 10 分鐘再查一次（頁面開著也會自動更新） */
+    setInterval(function(){
+      fetch('https://raw.githubusercontent.com/f60331123/pocket-map/main/index.html',{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+        var m=t.match(/APP_VER='([^']+)'/);if(!m)return;
+        if(m[1]!==APP_VER&&sessionStorage.getItem('pp_updn')!==m[1]){
+          sessionStorage.setItem('pp_updn',m[1]);
+          toast('🔄 發現新版 '+m[1]+' — 自動更新中…');
+          setTimeout(function(){location.reload(true)},1500);
+        }
+      }).catch(function(){});
+    },600000);
+  }catch(e){}
+})();
 /* ---------- Firebase 雲端同步（即時、免 Google 授權） ---------- */
 var DEFAULT_FB={apiKey:"AIzaSyBvA_edOcBBQd_G2tuBMQh53x4uexY9lE8",authDomain:"pocket-map585858.firebaseapp.com",databaseURL:"https://pocket-map585858-default-rtdb.firebaseio.com",projectId:"pocket-map585858",storageBucket:"pocket-map585858.firebasestorage.app",messagingSenderId:"393899606768",appId:"1:393899606768:web:0d87b79b09b3b73d733835"};
 var DEFAULT_FBCODE='K7X2MQ';
