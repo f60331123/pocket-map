@@ -1831,7 +1831,14 @@ function fillAddrSmart(r){
   if(addrWeak(fg.addr)&&r.lat!=null&&r.lon!=null){
     $('#fAddr').value='地址查詢中…';
     revAddr(+r.lat,+r.lon).then(function(a){
-      if(a){$('#fAddr').value=cleanAddr(a);toast('已自動補上地址')}
+      if(a){
+        /* 用門牌全址重走一次格式化，確保市區路號完整 */
+        var g2={lat:r.lat,lon:r.lon,display_name:a+' 〖門牌〗'};
+        var f2=fmtGeo(g2);
+        $('#fAddr').value=f2.addr||cleanAddr(a);
+        if(!$('#fName').value.trim()&&f2.name)$('#fName').value=f2.name;
+        toast('已自動補上門牌地址');
+      }
       else $('#fAddr').value=fg.addr||'';
     });
   }
@@ -1909,6 +1916,18 @@ function geoSearch(q){
       var b=document.createElement('button');
       var fg=fmtGeo(r);
       b.innerHTML='<b>'+esc(fg.name||fg.addr)+'</b>'+(fg.name&&fg.addr&&fg.name!==fg.addr?'<small>'+esc(fg.addr)+'</small>':'');
+      /* v73：清單階段就預查門牌 — 每個候選先反查完整地址（含號），結果直接顯示 */
+      if(fg.name&&addrWeak(fg.addr)&&r.lat!=null&&r.lon!=null){
+        b.innerHTML='<b>'+esc(fg.name)+'</b><small>查詢完整地址中…</small>';
+        (function(btn,rr){
+          revAddr(+rr.lat,+rr.lon).then(function(a){
+            if(!a)return;
+            var g2={lat:rr.lat,lon:rr.lon,display_name:a+' 〖門牌〗'};
+            var f2=fmtGeo(g2);r.display_name=g2.display_name;
+            btn.innerHTML='<b>'+esc(fg.name)+'</b><small>'+esc(f2.addr||a)+'</small>';
+          }).catch(function(){});
+        })(b,r);
+      }
       b.addEventListener('click',function(){
         S.draft={lat:+(+r.lat).toFixed(6),lng:+(+r.lon).toFixed(6)};
         var fg=fmtGeo(r);
@@ -2402,7 +2421,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v72';
+var APP_VER='v73';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
