@@ -2357,17 +2357,16 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><button id="mFb">\U0001F464 \u5e33\u865f\u8207\u540c\u6b65\uff08\u767b\u5165\u4fe1\u7bb1\uff09\u2026</button><button id="mExplore">🌐 公開探索（大家的推薦）</button><button id="mViewLink">🔗 給朋友看的網址（唯讀）</button><button id="mShared">👥 共用地圖（一起編輯）</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mFb">登入</button><button id="mExplore">大家的口袋</button><button id="mViewLink">讓朋友看</button><button id="mShared">一起收藏</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
-  document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
-  document.querySelector('#mSyncDiag').addEventListener('click',function(){m.remove();syncDiag()});
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mExplore').addEventListener('click',function(){m.remove();exploreUI()});
   document.querySelector('#mViewLink').addEventListener('click',function(){m.remove();viewLinkUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
+  renderAcctUI();
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
 });
@@ -2426,7 +2425,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v78';
+var APP_VER='v79';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2547,7 +2546,8 @@ function acctUI(){
   });
 }
 function renderAcctUI(){
-  var r=document.querySelector('#mAcct');if(r)r.textContent=AUTH.user?('\U0001F464 帳號：'+AUTH.user.email):'\U0001F464 登入 / 註冊（帳號同步）';
+  var r=document.querySelector('#mAcct');
+  var r2=document.querySelector('#mFb');if(r2)r2.textContent=AUTH.user?'登出':'登入';
 }
 function fbNewCode(n){n=n||8;var s='ABCDEFGHJKMNPQRSTUVWXYZ23456789',o='';for(var i=0;i<n;i++)o+=s[Math.floor(Math.random()*s.length)];return o}
 function fbPath(){return (AUTH.user&&S.sharedRoom)?('shared/'+S.sharedRoom):('users/'+AUTH.user.uid)}
