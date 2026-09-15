@@ -2124,22 +2124,53 @@ function loginGoogle(){
     }catch(e){toast('Google 登入啟動失敗：'+((e&&e.message)||e))}
   });
 }
-function gfetch(u,o){return fetch(u,o).then(function(r){if(r.status===401)throw{auth:true};return r})}
-function authExpired(){if(sessionStorage.getItem(KEY+'_reauth')){setSync('err');toast('Google 登入過期了 — 點頭像再登入一次');return}sessionStorage.setItem(KEY+'_reauth','1');toast('Google 登入過期了 — 正在幫你重新登入…');setTimeout(function(){loginRedirectFlow()},900)}
+function b64u(b){var s='';new Uint8Array(b).forEach(function(c){s+=String.fromCharCode(c)});return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function pkce(){var v=new Uint8Array(48);crypto.getRandomValues(v);var ver=b64u(v);localStorage.setItem(KEY+'_pv',ver);return crypto.subtle.digest('SHA-256',new TextEncoder().encode(ver)).then(function(h){return b64u(h)})}
+function gfetch(u,o){return fetch(u,o).then(function(r){
+  if(r.status!==401)return r;
+  return tryRefresh().then(function(tk){o=o||{};o.headers=Object.assign({},o.headers,{Authorization:'Bearer '+tk});return fetch(u,o)}).catch(function(){throw{auth:true}});
+})}
+var refreshing=null;
+function tryRefresh(){
+  if(refreshing)return refreshing;
+  if(!(S.user&&S.user.rtok))return Promise.reject({auth:true});
+  refreshing=fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(S.user.rtok)+'&client_id='+encodeURIComponent(cidGet())})
+  .then(function(r){return r.json()}).then(function(t){
+    if(!t||!t.access_token)throw{auth:true};
+    S.user.tok=t.access_token;persist();return t.access_token;
+  }).catch(function(e){throw e}).finally(function(){refreshing=null});
+  return refreshing;
+}
+function authExpired(){
+  if(S.user&&S.user.rtok){tryRefresh().then(function(){if(S.user&&S.user.tok)syncPull(S.user.tok)}).catch(function(){doAuthRedirect()});return}
+  doAuthRedirect();
+}
+function doAuthRedirect(){
+  if(sessionStorage.getItem(KEY+'_reauth')){setSync('err');toast('Google \u767b\u5165\u904e\u671f\u4e86 — \u9ede\u982d\u50cf\u518d\u767b\u5165\u4e00\u6b21');return}
+  sessionStorage.setItem(KEY+'_reauth','1');toast('Google \u767b\u5165\u904e\u671f\u4e86 — \u6b63\u5728\u5e6b\u4f60\u91cd\u65b0\u767b\u5165\u2026');setTimeout(function(){loginRedirectFlow()},900);
+}
 function loginRedirectFlow(){
   var cid=cidGet();if(!cid){askCid(loginRedirectFlow);return}
-  location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=token&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&include_granted_scopes=true&prompt=select_account';
+  pkce().then(function(ch){
+    location.href='https://accounts.google.com/o/oauth2/v2/auth?client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&response_type=code&scope='+encodeURIComponent('openid email profile https://www.googleapis.com/auth/drive.appdata')+'&access_type=offline&prompt=consent select_account&code_challenge='+ch+'&code_challenge_method=S256';
+  });
 }
-function finishLogin(tok){
+function finishLoginCode(code){
+  var cid=cidGet();
+  var ver=localStorage.getItem(KEY+'_pv');localStorage.removeItem(KEY+'_pv');
   setSync('syncing');
-  gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}})
-  .then(function(r){return r.json()}).then(function(u){
-    S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'使用者',email:(u&&u.email)||'',tok:tok,real:1};
-    $('#avatarBtn').textContent=S.user.name.charAt(0);
-    sessionStorage.removeItem(KEY+'_reauth');
-    persist();setSync('syncing');
-    syncPull(tok);
-  }).catch(function(e){if(e&&e.auth){authExpired();return}toast('Google 帳號資料讀取失敗');setSync('err')});
+  fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'code='+encodeURIComponent(code)+'&client_id='+encodeURIComponent(cid)+'&redirect_uri='+encodeURIComponent(location.origin+location.pathname)+'&grant_type=authorization_code'+(ver?'&code_verifier='+encodeURIComponent(ver):'')})
+  .then(function(r){return r.json()}).then(function(t){
+    if(!t||!t.access_token)throw new Error((t&&t.error)||'notok');
+    return gfetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+t.access_token}}).then(function(r){return r.json()}).then(function(u){
+      S.user={name:((u&&u.name)||'').split(' ')[0]||(u&&u.email)||'\u4f7f\u7528\u8005',email:(u&&u.email)||'',tok:t.access_token,rtok:t.refresh_token||(S.user&&S.user.rtok)||'',real:1};
+      $('#avatarBtn').textContent=S.user.name.charAt(0);
+      sessionStorage.removeItem(KEY+'_reauth');
+      persist();setSync('syncing');
+      if(S.user.rtok)toast('\u767b\u5165\u5b8c\u6210\uff01\u4ee5\u5f8c\u6191\u8b49\u904e\u671f\u6703\u81ea\u52d5\u7e8c\u671f\uff0c\u4e0d\u518d\u53eb\u4f60\u91cd\u8907\u767b\u5165');
+      syncPull(S.user.tok);
+    });
+  }).catch(function(){toast('Google \u767b\u5165\u4ea4\u63db\u5931\u6557\uff0c\u8acb\u518d\u8a66\u4e00\u6b21');setSync('err')});
 }
 function logoutGoogle(){
   var t=S.user&&S.user.tok;
@@ -2160,7 +2191,7 @@ function driveSave(tok,id,payload){
 }
 function doPush(tok){
   setSync('syncing');
-  var d=stateData();if(d.user)delete d.user.tok;
+  var d=stateData();if(d.user){delete d.user.tok;delete d.user.rtok}
   var payload={savedAt:Date.now(),data:d};
   var pre=cloudFid?Promise.resolve({files:[{id:cloudFid}]}):driveList(tok);
   pre.then(function(gl){
@@ -2277,6 +2308,7 @@ else if(S.user&&S.user.email)setTimeout(function(){try{authExpired()}catch(e){}}
 document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.user&&S.user.email&&!pulling)setTimeout(function(){try{S.user.tok?syncPull(S.user.tok):authExpired()}catch(e){}},300)});
 
 if(S.user&&S.user.real)setSync('local');
+(function(){try{var q=new URLSearchParams(location.search);var cd=q.get('code');if(cd){history.replaceState(null,'',location.pathname);finishLoginCode(cd);return}}catch(e){}})();
 (function(){var h=location.hash||'';
 if(h.indexOf('access_token=')>=0){var m=h.match(/access_token=([^&]+)/);history.replaceState(null,'',location.pathname+location.search);if(m)finishLogin(decodeURIComponent(m[1]).replace(/\+/g,' '))}
 else if(h.indexOf('error=')>=0){history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){toast('Google 登入取消')},600)}
