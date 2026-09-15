@@ -1533,12 +1533,13 @@ $('#shopSearchBtn').addEventListener('click',function(){
     l.innerHTML='';
     res.slice(0,6).forEach(function(r){
       var b=document.createElement('button');
-      var parts=r.display_name.split(', ');
-      b.innerHTML='<b>'+esc(parts[0])+'</b><small>'+esc(r.display_name)+'</small>';
+      var fg=fmtGeo(r);
+      b.innerHTML='<b>'+esc(fg.name||fg.addr)+'</b>'+(fg.name&&fg.addr&&fg.name!==fg.addr?'<small>'+esc(fg.addr)+'</small>':'');
       b.addEventListener('click',function(){
         S.draft={lat:+(+r.lat).toFixed(6),lng:+(+r.lon).toFixed(6)};
-        $('#fAddr').value=cleanAddr(r.display_name);
-        if(!$('#fName').value.trim())revGeoName(+r.lat,+r.lng);
+        var fg=fmtGeo(r);
+        if(fg.addr)$('#fAddr').value=fg.addr;
+        if(!$('#fName').value.trim()){if(fg.name)$('#fName').value=fg.name;else revGeoName(+r.lat,+r.lng)}
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
         updateCoordTxt();l.classList.remove('show');
         toast('已定位，按「釘起來」完成');nudgeSave('#fName');
@@ -1691,6 +1692,31 @@ function normGeo(list){
   });
   return out;
 }
+function fmtGeo(r){
+  var dn=String(r.display_name||'').replace(/\u3016[^\u3016]*\u3017/g,'');
+  var raw=dn.split(/[,\uff0c]/),parts=[];
+  raw.forEach(function(seg){
+    var t=seg.trim();if(!t)return;
+    var words=t.split(/\s+/);
+    if(words.length>1)words.forEach(function(w){if(w)parts.push(w)});else parts.push(t);
+  });
+  if(!parts.length)return{name:'',addr:dn};
+  var city='',dist='',street='',num='',seenCity=false;
+  parts.forEach(function(s){
+    if(/^[0-9]{3,6}$/.test(s)){if(seenCity)return;if(!num)num=s;return}
+    if(/^(\u53f0|\u81fa)\u7063$/.test(s))return;
+    if(/\u88e1$/.test(s)&&s.length<=4&&s.indexOf('\u8def')<0)return;
+    if(!city&&/^[^\u5e02\u7e23]{1,2}[\u5e02\u7e23][0-9]{0,6}$/.test(s)){city=s.replace(/[0-9]+$/,'');seenCity=true;return}
+    if(!dist&&/(\u5340|\u9109|\u93ae)$/.test(s)&&s.length<=4&&s!==city){dist=s;return}
+    if(!street&&/(\u8def|\u8857|\u5927\u9053|\u6bb5|\u5df7|\u5f04)/.test(s)){street=s;return}
+  });
+  var addr=city+dist+street;
+  if(num&&street&&addr.indexOf('\u865f')<0)addr+=num+'\u865f';
+  var first=parts[0],name='';
+  if(parts.length>1&&!/^[0-9]/.test(first)&&!/(\u8def|\u8857|\u5927\u9053|\u6bb5|\u5df7|\u5f04|\u865f)/.test(first))name=first;
+  if(!addr)addr=dn;
+  return{name:name,addr:addr};
+}
 function arcGeo(q){
   return fetch('https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=5&singleLine='+encodeURIComponent(q))
     .then(function(r){if(!r.ok)throw new Error('arcgis '+r.status);return r.json()})
@@ -1719,8 +1745,10 @@ function geocode(q0){var cs=document.getElementById('citySel');var city=cs&&cs.v
   return Promise.all(jobs).then(function(rs){
     var all=normGeo(rs[0].concat(rs[1],rs[2],rs[3]||[]));
     if(shop.length<2||!all.length)return all;
+    var hasRoad=function(s){return /(路|街|巷|弄|大道|段|號)/.test(String(s))};
     var hit=all.filter(function(r){var n=r.display_name.replace(/[^\u4e00-\u9fff]/g,'');if(!n)return false;for(var i=0;i+1<shop.length;i++)if(n.indexOf(shop.substr(i,2))>=0)return true;return false});
-    return hit.length?hit.concat(all.filter(function(r){return hit.indexOf(r)<0})):all;
+    var rest=all.filter(function(r){return hit.indexOf(r)<0&&hasRoad(r.display_name)});
+    return hit.concat(rest);
   });
 }
 
@@ -1766,15 +1794,16 @@ $('#textParseBtn').addEventListener('click',function(){
     hint.className='urlHint ok';hint.textContent='找到 '+all.length+' 個候選地點，點正確的那個：';
     list.innerHTML='';
     all.slice(0,6).forEach(function(item){
-      var parts=item.r.display_name.split(', ');
+      var fg=fmtGeo(item.r);
       var b=document.createElement('button');
-      b.innerHTML='<b>'+esc(parts[0])+'</b><small>'+esc(item.r.display_name)+'</small>';
+      b.innerHTML='<b>'+esc(fg.name||fg.addr)+'</b>'+(fg.name&&fg.addr&&fg.name!==fg.addr?'<small>'+esc(fg.addr)+'</small>':'');
       b.addEventListener('click',function(){
         S.draft={lat:+(+item.r.lat).toFixed(6),lng:+(+item.r.lon).toFixed(6)};
         var used={};addr.slice(0,2).forEach(function(l){used[l]=1});if(shop[0])used[shop[0]]=1;
             var rest=lines.filter(function(l){return !used[l]&&l!==item.r.display_name&&!ocrJunkLine(l)}).join('\n');
-            $('#fAddr').value=cleanAddr(item.r.display_name).replace(/^(地址|位址)\s*[:：]\s*/,'');
-            if(shop[0]&&!$('#fName').value.trim())$('#fName').value=shop[0].replace(/^店(家|名)\s*[:：]\s*/,'');
+            var fg2=fmtGeo(item.r);
+            if(fg2.addr)$('#fAddr').value=fg2.addr;
+            if(!$('#fName').value.trim())$('#fName').value=fg2.name||shop[0]||'';
             if(!$('#fIntro').value.trim())$('#fIntro').value=stripUrl(rest);
         
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
@@ -1799,11 +1828,13 @@ function geoSearch(q){
     list.innerHTML='';
     res.forEach(function(r){
       var b=document.createElement('button');
-      var parts=r.display_name.split(', ');
-      b.innerHTML='<b>'+esc(parts[0])+'</b><small>'+esc(r.display_name)+'</small>';
+      var fg=fmtGeo(r);
+      b.innerHTML='<b>'+esc(fg.name||fg.addr)+'</b>'+(fg.name&&fg.addr&&fg.name!==fg.addr?'<small>'+esc(fg.addr)+'</small>':'');
       b.addEventListener('click',function(){
         S.draft={lat:+(+r.lat).toFixed(6),lng:+(+r.lon).toFixed(6)};
-        $('#fAddr').value=cleanAddr(r.display_name);revGeoName(+r.lat,+r.lng);
+        var fg=fmtGeo(r);
+        if(fg.addr)$('#fAddr').value=fg.addr;
+        if(fg.name&&!$('#fName').value.trim())$('#fName').value=fg.name;else if(!fg.name)revGeoName(+r.lat,+r.lng);
         nudgeSave('#fName');
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
         updateCoordTxt();
@@ -2167,15 +2198,41 @@ $('#avatarBtn').addEventListener('click',function(){
   m.innerHTML=(S.user&&S.user.email
     ?'<div id="mWho" style="pointer-events:none;white-space:nowrap">'+esc(S.user.email)+'</div><div id="mSyncRow" style="pointer-events:none;white-space:nowrap;font-size:11.5px;color:#8A8674">僅存本機</div><button id="mLogout">登出（釘點保留在本機）</button>'
     :'<button id="mLogin">登入 Google（開啟雲端同步）</button><button id="mLogin2">登入 Google（相容模式—彈窗空白時用這個）</button>')
-    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
+    +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button><button id="mCid">雲端同步設定…</button><button id="mSyncDiag">🔍 同步狀態檢查（不同步就按這個）</button><div style="height:1px;background:var(--line);margin:4px 0"></div><button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   var lg=document.querySelector('#mLogin');if(lg)lg.addEventListener('click',function(){m.remove();loginGoogle()});var lg2=document.querySelector('#mLogin2');if(lg2)lg2.addEventListener('click',function(){m.remove();loginRedirectFlow()});
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mCid').addEventListener('click',function(){m.remove();askCid(null)});
+  document.querySelector('#mSyncDiag').addEventListener('click',function(){m.remove();syncDiag()});
   document.querySelector('#mUpdate').addEventListener('click',function(){m.remove();appUpdate()});
   var lo=document.querySelector('#mLogout');if(lo)lo.addEventListener('click',function(){m.remove();logoutGoogle()});
 });
+function syncDiag(){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard"><h4>\ud83d\udd0d 同步狀態檢查</h4><div id="sdBody" style="font-size:13px;line-height:1.8;color:var(--ink2)">\u6aa2\u67e5\u4e2d\u2026</div><div class="ceBtns"><button type="button" id="sdClose">關閉</button><button type="button" class="primary" id="sdSync">立即同步</button></div></div>';
+  document.body.appendChild(ov);
+  $('#sdClose').addEventListener('click',function(){ov.remove()});
+  $('#sdSync').addEventListener('click',function(){ov.remove();if(S.user&&S.user.tok)syncPull(S.user.tok);else toast('先登入 Google，再回來按檢查')});
+  var b=$('#sdBody');
+  b.innerHTML='這台裝置帳號：'+(S.user&&S.user.email?esc(S.user.email)+'（已登入）':'<b style="color:#C33">未登入</b> — 手機和電腦都要登入同一個 Gmail')
+    +'<br>本機資料：'+(S.pins?S.pins.length:0)+' 家店';
+  if(!(S.user&&S.user.tok))return;
+  gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q='+encodeURIComponent("name='pocket-pins-data.json'"),{headers:{Authorization:'Bearer '+S.user.tok}})
+  .then(function(r){return r.json()}).then(function(gl){
+    var f=gl&&gl.files&&gl.files[0];
+    if(!f){b.innerHTML+='<br>雲端：<b style="color:#C33">還沒有雲端備份</b> — 按「立即同步」建立';return null}
+    cloudFid=f.id;
+    return gfetch('https://www.googleapis.com/drive/v3/files/'+f.id+'?alt=media',{headers:{Authorization:'Bearer '+S.user.tok}}).then(function(r){return r.json()}).then(function(cloud){
+      var n=cloud&&cloud.data&&Array.isArray(cloud.data.pins)?cloud.data.pins.length:0;
+      var t=cloud&&cloud.savedAt?new Date(cloud.savedAt).toLocaleString('zh-TW',{hour12:false}):'';
+      b.innerHTML+='<br>雲端備份：'+n+' 家店'+(t?'（上次存：'+t+'）':'')
+        +(n===S.pins.length?'<br>\u2705 兩邊數量一致 — 這台裝置同步是通的':'<br>\u26a0\ufe0f 本機 '+S.pins.length+' 家 vs 雲端 '+n+' 家 — 按「立即同步」合併');
+    });
+  }).catch(function(e){
+    b.innerHTML+='<br><b style="color:#C33">連不上 Google Drive'+((e&&e.auth)?'（登入過期 — 按「立即同步」會自動重登）':'（網路或權限問題）')+'</b>';
+  });
+}
 function exportBackup(){
   var d=new Date(),pad=function(n){return (n<10?'0':'')+n};
   var name='口袋地圖備份-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json';
