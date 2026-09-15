@@ -103,6 +103,7 @@ header{
 }
 .avatar.out{background:#C9C5B6}
 .avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.avPen{position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:50%;background:#fff;border:1px solid var(--line);font-size:9px;line-height:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.18);pointer-events:auto}
 .menu{
   position:absolute;right:0;top:46px;background:#fff;border:1px solid var(--line);
   border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:130px;z-index:1200;
@@ -2352,7 +2353,8 @@ function syncPull(tok){
     });
   }).catch(function(e){if(e&&e.auth){autoReconnect()||authTip();return}setSync('err')});
 }
-$('#avatarBtn').addEventListener('click',function(){
+$('#avatarBtn').addEventListener('click',function(e){
+  if(e.target.closest('.avPen')){acctUI();return}
   var existing=$('#meMenu');
   if(existing){existing.remove();return}
   this.parentElement.style.position='relative';
@@ -2429,7 +2431,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v82';
+var APP_VER='v83';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2526,10 +2528,10 @@ function acctUI(){
       rd.onload=function(){
         var im=new Image();
         im.onload=function(){
-          var cv=document.createElement('canvas');cv.width=cv.height=128;
+          var cv=document.createElement('canvas');cv.width=cv.height=160;
           var cx=cv.getContext('2d');var s=Math.min(im.width,im.height);
-          cx.drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,128,128);
-          try{localStorage.setItem(KEY+'_avi',cv.toDataURL('image/jpeg',0.85))}catch(e){toast('圖片太大存不進去，換小一點的');return}
+          cx.drawImage(im,(im.width-s)/2,(im.height-s)/2,s,s,0,0,160,160);
+          try{localStorage.setItem(KEY+'_avi',cv.toDataURL('image/jpeg',0.82))}catch(e){toast('圖片太大存不進去，換小一點的');return}
           renderAvatar();toast('頭像換好了 📸');setTimeout(function(){ov.remove();acctUI()},250);
         };
         im.src=rd.result;
@@ -2586,10 +2588,13 @@ function renderAvatar(){
   var b=document.querySelector('#avatarBtn');if(!b)return;
   var img=avImgGet();
   b.classList.toggle('out',!AUTH.user);
-  if(img){b.innerHTML='<img src="'+img+'" alt="">';return}
-  b.textContent=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'訪';
+  var pen='<span class="avPen">✏️</span>';
+  if(img){b.innerHTML='<img src="'+img+'" alt="">'+pen;return}
+  var ch=(AUTH.user&&AUTH.user.email)?AUTH.user.email.charAt(0).toUpperCase():'訪';
+  b.textContent=ch;
   b.style.background=AUTH.user?(avColorGet()||''):'#C9C5B6';
   if(!AUTH.user)b.style.removeProperty('background');
+  b.insertAdjacentHTML('beforeend',pen);
 }
 function avColorGet(){return localStorage.getItem(KEY+'_avc')||''}
 function avImgGet(){return localStorage.getItem(KEY+'_avi')||''}
@@ -2809,9 +2814,27 @@ function wsQuickAdd(){
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
   var code=fbNewCode(8);
   FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
-    rooms.push({code:code});wsSaveRooms(rooms);
-    wsSwitch(code,function(){toast('✓ 已建立（'+rooms.length+'/5）— 邀請碼：'+code)});
+      rooms.push({code:code});wsSaveRooms(rooms);
+    wsSwitch(code,function(){toast('✓ 已建立（'+rooms.length+'/5）— 邀請碼：'+code);wsNamePrompt(code)});
   }).catch(function(){toast('建立失敗，檢查網路再試')});
+}
+function wsNamePrompt(code,onDone){
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  ov.innerHTML='<div class="ceCard"><h4>為共用地圖取個名字</h4>'
+    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left">最多 6 個字 — 字越多會自動縮小，清單上一排都看得清楚</div>'
+    +'<input class="txt" id="wsNm" maxlength="6" placeholder="例如：跟阿嬌的" style="width:100%;margin-top:8px;font-size:16px">'
+    +'<div style="text-align:center;margin-top:8px;color:var(--ink2)"><span style="font-size:11px">清單長這樣 → </span><span id="wsNmPrev" style="font-weight:900;color:var(--ink)">預覽</span></div>'
+    +'<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:10px">邀請碼（傳給朋友，他在「共用地圖」貼上加入）：</div>'
+    +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="wsNmCode" value="'+escAttr(code)+'" readonly style="flex:1;font-weight:900;letter-spacing:2px;text-transform:uppercase"><button type="button" id="wsNmCopy">複製</button></div>'
+    +'<div class="ceBtns"><button type="button" id="wsNmSkip">跳過</button><button type="button" class="primary" id="wsNmOk">好了</button></div></div>';
+  document.body.appendChild(ov);
+  var inp=document.getElementById('wsNm'),pv=document.getElementById('wsNmPrev');
+  function up(){var v=inp.value||'預覽';pv.textContent=v;pv.style.fontSize=(v.length<=2?18:v.length<=4?16:v.length<=5?14.5:13)+'px'}
+  inp.addEventListener('input',up);
+  document.getElementById('wsNmCopy').addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(code).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
+  var fin=function(){var nm=(inp.value||'').trim();if(nm){var rooms=wsRooms();rooms.forEach(function(r){if(r.code===code)r.name=nm});wsSaveRooms(rooms)}ov.remove();if(onDone)onDone()};
+  document.getElementById('wsNmOk').addEventListener('click',fin);
+  document.getElementById('wsNmSkip').addEventListener('click',function(){ov.remove();if(onDone)onDone()});
 }
 function sharedUI(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
@@ -2824,7 +2847,9 @@ function sharedUI(){
     if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:6px 0">還沒有共用地圖 — 下面可以建立（初始送你一個）或用朋友的邀請碼加入</div>';
     rooms.forEach(function(rm,i){
       var cur=S.sharedRoom===rm.code;
-      h+='<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>👥</span><span style="text-align:left"><b>共用地圖 '+(i+1)+'</b> · '+escAttr(rm.code)+(cur?'（使用中）':'')+'</span></button><button type="button" class="danger" data-wsdel="'+i+'" style="padding:8px 12px">刪</button></div>';
+      var nm=(rm.name&&rm.name.trim())?rm.name.trim():('共用地圖 '+(i+1));
+      var fs=nm.length<=4?15:(nm.length<=5?14:13);
+      h+='<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>👥</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?' ✅':'')+' '+escAttr(rm.code)+'</small></span></button><button type="button" class="danger" data-wsdel="'+i+'" style="padding:8px 12px">刪</button></div>';
     });
     h+='</div>';
     if(rooms.length<5){
@@ -2850,14 +2875,14 @@ function sharedUI(){
       if(code.length<8){toast('邀請碼是 8 碼 — 跟朋友再確認一下');return}
       if(wsRooms().some(function(r){return r.code===code})){toast('你已經有這個共用地圖了');return}
       var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);
-      wsSwitch(code,function(){render()});
+      wsSwitch(code,function(){render();wsNamePrompt(code)});
     });
     var nb=document.getElementById('wsNew');
     if(nb)nb.addEventListener('click',function(){
       var code=fbNewCode(8);
       FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(function(){
         var rooms=wsRooms();rooms.push({code:code});wsSaveRooms(rooms);
-        wsSwitch(code,function(){render();toast('已建立 — 邀請碼：'+code)});
+        wsSwitch(code,function(){render();wsNamePrompt(code)});
       }).catch(function(){toast('建立失敗，檢查網路再試')});
     });
   }
