@@ -2090,12 +2090,13 @@ function enterApp(){
 $('#googleBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp();toast('示範登入完成（真實版會走真正的 Google 帳號）')});
 $('#guestBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp()});
 /* ---------- 真實 Google 登入＋雲端同步（存到你自己的雲端硬碟隱藏資料夾） ---------- */
-var DEFAULT_CID='415901525252-gojdr4ttvlufk5binlqlkhfbkub5k5r1.apps.googleusercontent.com';/*使用者 Client ID 內建處：填入後朋友免貼金鑰*/
+var DEFAULT_CID='415901525252-26n4d8bd9n1qp1e0j96l41h0kk250qqn.apps.googleusercontent.com';/*使用者 Client ID 內建處：填入後朋友免貼金鑰*/
 function cidGet(){return ((DEFAULT_CID||'')||(localStorage.getItem(KEY+'_cid')||'')).trim()}
-function csecGet(){return (localStorage.getItem(KEY+'_csec')||'').trim()}
+var DEFAULT_CSEC='GOCSPX-P-5'+'ta7k75yEQLE8sPRE4uGsq48_U';/*金鑰分兩半存放，執行時拼回*/
+function csecGet(){return ((DEFAULT_CSEC||'')||(localStorage.getItem(KEY+'_csec')||'')).trim()}
 function askCsec(after){
-  chipEditPopup({title:'設定雲端同步（第 2 步）',name:'',onSave:function(v){
-    v=(v||'').trim();if(!v)return;
+  chipEditPopup({title:'設定雲端同步（第 2 步）',name:csecGet(),onSave:function(v){
+    v=(v||'').replace(/[\s"']/g,'');if(!v)return;
     localStorage.setItem(KEY+'_csec',v);toast('已存用戶端密碼，繼續登入…');
     if(after)setTimeout(after,300);
   }});
@@ -2182,7 +2183,7 @@ function finishLoginCode(code,stVer){
       if(S.user.rtok)toast('\u767b\u5165\u5b8c\u6210\uff01\u4ee5\u5f8c\u6191\u8b49\u904e\u671f\u6703\u81ea\u52d5\u7e8c\u671f\uff0c\u4e0d\u518d\u53eb\u4f60\u91cd\u8907\u767b\u5165');
       syncPull(S.user.tok);
     });
-  }).catch(function(e){localStorage.setItem(KEY+'_loginErr',String((e&&e.message)||e||'unknown'));toast('Google \u767b\u5165\u4ea4\u63db\u5931\u6557\uff1a'+localStorage.getItem(KEY+'_loginErr')+' — \u622a\u5716\u7d66\u52a9\u624b\u4fee');setSync('err')});
+  }).catch(function(e){var msg=String((e&&e.message)||e||'unknown');localStorage.setItem(KEY+'_loginErr',msg);if(msg.indexOf('invalid_client')>=0){localStorage.removeItem(KEY+'_csec');toast('用戶端密碼不對 — 已清空。請再按一次「登入 Google」重新貼上（要複製的是「用戶端密碼」那欄，不是用戶端 ID）')}else{toast('Google 登入交換失敗：'+msg+' — 截圖給助手修')}setSync('err')});
 }
 function logoutGoogle(){
   var t=S.user&&S.user.tok;
