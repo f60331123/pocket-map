@@ -2396,7 +2396,7 @@ $('#avatarBtn').addEventListener('click',function(e){
     return '<button type="button" data-menuws="'+escAttr(rm.code)+'" style="padding-left:18px;font-size:13px;'+(cur?'background:#F3F1E7;font-weight:700;':'')+'">↳ '+esc(nm)+'</button>';
   }).join('');
   m.innerHTML='<button id="mFb">登入</button><div id="mSyncRow" style="font-size:11.5px;color:#8A8674;padding:2px 4px 8px;text-align:left"></div><button id="mPersonal">個人地圖</button>'
-    +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:42px;text-align:center;font-size:18px;flex:none" title="新增或加入共用地圖">＋</button></div>'
+    +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:34px;height:34px;padding:0;text-align:center;font-size:16px;line-height:1;flex:none" title="新增或加入共用地圖">＋</button></div>'
     +(roomBtns?'<div style="margin:4px 0 2px">'+roomBtns+'</div>':'')
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
@@ -2469,7 +2469,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v99';
+var APP_VER='v101';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2985,9 +2985,9 @@ function sharedUI(){
     }
     var rooms=wsRooms();
     var h='<div class="ceCard"><h4>共用地圖</h4>';
-    h+='<div style="text-align:left"><button type="button" class="suggRow" id="wsMe" style="width:100%;justify-content:flex-start'+(S.sharedRoom?';opacity:.75':';outline:2px solid #7B9E6B')+'"><span>🏠</span><span style="text-align:left"><b>個人地圖'+(S.sharedRoom?'':'（使用中）')+'</b><br><small style="color:var(--ink2)">只有你看得到的那份</small></span></button></div>';
+    h+='<div style="font-size:12px;color:var(--ink2);text-align:left;margin-bottom:8px">這裡只放你的共用地圖；需要時再按頭像旁邊的 ＋ 建立或加入。</div>';
     h+='<div style="max-height:38vh;overflow:auto;text-align:left;margin-top:8px">';
-    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:6px 0">還沒有共用地圖 — 按下面「新增 / 加入共用地圖」可以自己創一張，或輸入朋友給你的邀請碼加入。</div>';
+    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:10px 0">目前還沒有共用地圖；有人要一起用時再按 ＋ 就好。</div>';
     rooms.forEach(function(rm,i){
       var cur=S.sharedRoom===rm.code;
       var nm=wsDefaultRoomName(rm,i);
@@ -3000,12 +3000,11 @@ function sharedUI(){
       h+='<div style="font-size:12px;color:var(--ink2);text-align:left;margin-top:8px">目前這張共用地圖的邀請碼：</div>'
         +'<div style="display:flex;gap:6px;margin-top:4px"><input class="txt" id="wsCurCode" value="'+escAttr(S.sharedRoom)+'" readonly style="flex:1;font-weight:900;letter-spacing:2px;text-transform:uppercase"><button type="button" id="wsCurCopy">複製</button></div>';
     }
-    if(rooms.length<5)h+='<div class="ceBtns"><button type="button" class="primary" id="wsAddShared">新增 / 加入共用地圖（'+rooms.length+'/5）</button><button type="button" id="wsClose">關閉</button></div>';
-    else h+='<div style="font-size:12px;color:#8A8674;margin-top:8px;text-align:center">已達上限 5 個 — 刪掉一個才能再加</div><div class="ceBtns"><button type="button" id="wsClose">關閉</button></div>';
-    h+='<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">建立者可以刪除整張共用地圖；加入的人可以退出。建立後先顯示「等待朋友加入」，朋友輸入邀請碼後就會一起用同一張地圖。</div></div>';
+    if(rooms.length>=5)h+='<div style="font-size:12px;color:#8A8674;margin-top:8px;text-align:center">已達上限 5 個 — 刪掉一個才能再加</div>';
+    h+='<div class="ceBtns"><button type="button" id="wsClose">關閉</button></div>';
+    h+='<div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">這裡只用來切換、改名、刪除或退出共用地圖；要新增或加入請按頭像旁邊的 ＋。</div></div>';
     ov.innerHTML=h;
     document.getElementById('wsClose').addEventListener('click',function(){ov.remove()});
-    document.getElementById('wsMe').addEventListener('click',function(){if(!S.sharedRoom){toast('現在就是在你的個人地圖');return}wsSwitch('',function(){hydrated=false;render()})});
     var ccb=document.getElementById('wsCurCopy');
     if(ccb)ccb.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(S.sharedRoom).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
     ov.querySelectorAll('[data-ws]').forEach(function(b){b.addEventListener('click',function(){var c=b.dataset.ws;if(S.sharedRoom===c){toast('已經在使用這個共用地圖');return}wsSwitch(c,function(){hydrated=false;render()})})});
@@ -3028,8 +3027,6 @@ function sharedUI(){
         }).catch(function(e){toast('退出失敗：'+((e&&e.message)||e))});
       }
     })});
-    var ab=document.getElementById('wsAddShared');
-    if(ab)ab.addEventListener('click',function(){ov.remove();wsQuickAdd(function(){sharedUI()})});
     if(!skipHydrate&&!hydrated){hydrated=true;wsHydrateRooms(function(){if(document.body.contains(ov))render(true)})}
   }
   document.body.appendChild(ov);
