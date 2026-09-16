@@ -1804,13 +1804,13 @@ $('#saveBtn').addEventListener('click',function(){
     if(S.editing){
       var p=S.pins.find(function(x){return x.id===S.editing});
       if(p)Object.assign(p,data);
-      saved=p;toast('已更新');
+      saved=p;toast(saved&&saved.lat!=null?'已更新並釘上地圖':'已更新');
     }else{
       data.id=Date.now();data.created=Date.now();
       S.pins.push(data);saved=data;
-      toast(data.lat!=null?'已釘上地圖':'已釘起來（沒抓到位置，可稍後補）');
+      toast(saved&&saved.lat!=null?'已釘上地圖':'已釘起來');
     }
-    persist();renderAll();closePin();
+    persist();renderAll();closePin();finish();
     if(saved&&saved.lat!=null&&mapLib){
       mapLib.easeTo({center:[saved.lng,saved.lat],zoom:Math.max(mapLib.getZoom(),13),duration:600});
       setTimeout(function(){openPopupFor(saved)},650);
@@ -1825,7 +1825,7 @@ $('#saveBtn').addEventListener('click',function(){
         S.draft={lat:+(+picked.lat).toFixed(6),lng:+(+picked.lon).toFixed(6)};
         if(!$('#fAddr').value.trim())$('#fAddr').value=cleanAddr(picked.display_name);
       }
-    }).catch(function(){}).then(function(){doSave();finish()});
+    }).catch(function(){}).then(doSave);
     return;
   }
   doSave();
