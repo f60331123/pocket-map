@@ -1488,6 +1488,29 @@ function ocrJunkLine(l){
   if(/^#/.test(l)&&/#/.test(l.slice(1)))return true;
   return false;
 }
+function ocrNorm(s){return String(s||'').replace(/[：:]/g,'').replace(/[【】\[\]（）()「」『』]/g,'').replace(/\s+/g,'').trim()}
+function ocrFixApplyLine(l){
+  var map=S.ocrFixes||{},n=ocrNorm(l),v=map[n];
+  if(v)return v;
+  Object.keys(map).some(function(k){if(!k)return false;if(n===k||n.indexOf(k)>=0||k.indexOf(n)>=0){v=map[k];return true}return false});
+  return v||l;
+}
+function ocrRememberFixes(raw,finalObj){
+  if(!raw||!finalObj)return;
+  if(!S.ocrFixes)S.ocrFixes={};
+  if(!S.ocrCases)S.ocrCases=[];
+  [['name',finalObj.name],['addr',finalObj.addr],['phone',finalObj.phone],['metro',finalObj.metro]].forEach(function(pr){
+    var val=String(pr[1]||'').trim();
+    if(!val)return;
+    String(raw).split(/\n+/).map(function(x){return x.trim()}).filter(Boolean).forEach(function(line){
+      var nl=ocrNorm(line),nv=ocrNorm(val);
+      if(!nl||!nv||nl===nv)return;
+      if((pr[0]==='phone'&&/\d{8,}/.test(nl.replace(/\D/g,'')))||(pr[0]==='addr'&&/(路|街|道|巷|弄|段|號)/.test(line))||(pr[0]==='name'&&nl.length>=4)||(pr[0]==='metro'&&/捷運|站/.test(val)))S.ocrFixes[nl]=val;
+    });
+  });
+  var sig=ocrNorm(raw).slice(0,80),entry={sig:sig,name:finalObj.name||'',addr:finalObj.addr||'',phone:finalObj.phone||'',metro:finalObj.metro||'',ts:Date.now()};
+  S.ocrCases=[entry].concat((S.ocrCases||[]).filter(function(x){return x.sig!==sig})).slice(0,40);
+}
 function ocrCleanLines(t){
   var raw=ocrRawLines(t),out=[],seen={};
   raw.forEach(function(l0){
@@ -2498,7 +2521,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v104';
+var APP_VER='v105';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
