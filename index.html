@@ -121,9 +121,9 @@ header{
 .chip,.catChip{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .chip.armed,.catChip.armed{transform:scale(1.04)}
 .chip.dragging,.catChip.dragging{opacity:.9;box-shadow:0 6px 16px rgba(35,40,31,.28);transform:scale(1.07);z-index:5;position:relative}
-#chipEditOverlay{position:fixed;inset:0;background:rgba(30,32,26,.45);z-index:3000;display:flex;align-items:flex-end;justify-content:center}
-#chipEditOverlay .ceCard{background:#fff;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:420px;box-shadow:0 -8px 30px rgba(0,0,0,.2)}
-@media(min-width:641px){#chipEditOverlay{align-items:flex-end}#chipEditOverlay .ceCard{border-radius:16px 16px 0 0;max-width:460px}}
+#chipEditOverlay{position:fixed;inset:0;background:rgba(30,32,26,.45);z-index:4000;display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom));overflow:auto}
+#chipEditOverlay .ceCard{background:#fff;border-radius:18px;max-height:min(82dvh,680px);overflow:auto;-webkit-overflow-scrolling:touch;padding:18px 16px calc(18px + env(safe-area-inset-bottom));width:min(100%,460px);box-shadow:0 16px 40px rgba(0,0,0,.24)}
+@media(min-width:641px){#chipEditOverlay{align-items:center;padding:24px}#chipEditOverlay .ceCard{border-radius:18px;max-width:460px}}
 #chipEditOverlay h4{margin:0 0 10px;font-size:15px}
 #chipEditOverlay .ceRow{display:flex;gap:8px;margin-top:10px;align-items:center}
 #chipEditOverlay .ceBtns{display:flex;gap:8px;margin-top:14px}
@@ -2758,6 +2758,7 @@ function wsRenamePrompt(code,onDone){
 function wsQuickAdd(onDone){
   var rooms=wsRooms();
   if(rooms.length>=5){toast('共用地圖最多 5 個 — 刪掉一個才能再加');return}
+  var oldMenu=$('#meMenu');if(oldMenu)oldMenu.remove();
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   var mode='create',nameTxt='',joinCode='',createCode=fbNewCode(8);
   function render(){
@@ -2782,6 +2783,7 @@ function wsQuickAdd(onDone){
       +(createOn
         ?'<div style="display:flex;gap:6px;margin-top:6px"><input class="txt" id="wsDlgCode" value="'+escAttr(createCode)+'" readonly style="flex:1;font-weight:900;letter-spacing:2px;text-transform:uppercase"><button type="button" id="wsCopyCode">複製</button></div><div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">完成後你先看到這張地圖，狀態會顯示「等待朋友加入」。</div>'
         :'<input class="txt" id="wsDlgCode" maxlength="8" placeholder="輸入 8 碼邀請碼" value="'+escAttr(joinCode)+'" style="width:100%;margin-top:6px;font-size:16px;text-transform:uppercase"><div style="font-size:11.5px;color:#8A8674;margin-top:6px;text-align:left">朋友建立後把邀請碼傳給你；你輸入完成就會加入同一張地圖。</div>')
+      +'<div style="font-size:11.5px;color:#8A8674;text-align:left;margin-top:10px">如果畫面被鍵盤擋住，先收起鍵盤再按下面按鈕。</div>'
       +'<div class="ceBtns"><button type="button" id="wsAddCancel">取消</button><button type="button" class="primary" id="wsDoDone">'+(createOn?'完成並建立':'完成並加入')+'</button></div></div>';
     document.getElementById('wsModeCreate').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();mode='create';render()});
     document.getElementById('wsModeJoin').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();joinCode='';mode='join';render()});
@@ -2818,6 +2820,7 @@ function wsQuickAdd(onDone){
   render();
 }
 function sharedUI(){
+  var oldMenu=$('#meMenu');if(oldMenu)oldMenu.remove();
   var ov=document.createElement('div');ov.id='chipEditOverlay';
   var hydrated=false;
   function render(skipHydrate){
