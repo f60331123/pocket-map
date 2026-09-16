@@ -961,7 +961,15 @@ function switchNext(reason){
   if(reason)toast(reason+STYLES[styleIdx+1].name);
   applyStyle(styleIdx+1,false);
 }
-function handleMapErr(){errCount++;if(errCount>=4)switchNext('這個地圖來源載入失敗，切換備援：');}
+function handleMapErr(e){
+  try{
+    if(mapLib&&mapLib.isStyleLoaded&&mapLib.isStyleLoaded()){
+      var em='';try{em=String((e&&e.error&&e.error.message)||'')}catch(x){}
+      if(!/style|sprite|glyph/i.test(em))return;/* 底圖已載入，只是個別圖磚失敗（例如縮放太深）→ 不要亂切圖資 */
+    }
+  }catch(x){}
+  errCount++;if(errCount>=4)switchNext('這個地圖來源載入失敗，切換備援：');
+}
 function webglOK(){try{var c=document.createElement('canvas');return !!(c.getContext('webgl')||c.getContext('experimental-webgl'))}catch(e){return false}}
 function initMainMap(){
   if(mapLib)return;
@@ -1120,48 +1128,98 @@ function openPopupFor(p,idx){
   if(!mapLib)return;
   popupRender(p,idx||0);
 }
-function renderMarkers(){
-  if(!mapLib)return;
-  pinMarkers.forEach(function(m){m.remove()});pinMarkers=[];
-  var pts=[];
-  function addMarker(p){
-    var el=document.createElement('button');el.type='button';
-    var theme=isSharedMode()?memberTheme(ownerUidOf(p)):null;
-    el.className='pin'+(theme?(' '+theme.key):'');
-    el.style.setProperty('--c',stColor(p.status));
-    el.style.setProperty('--cc',catColor(p.cat));
-    el.title=p.name||'';
-    el.setAttribute('aria-label',p.name||'圖釘');
-    el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
-    var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
-    pinMarkers.push(new maplibregl.Marker({element:wrap,anchor:'bottom'}).setLngLat([p.lng,p.lat]).addTo(mapLib));
-  }
-  var cell=40,buckets={};
-  filtered().forEach(function(p){
-    if(p.lat==null||p.lng==null)return;
-    pts.push([p.lng,p.lat]);
-    var px=null;try{px=mapLib.project([p.lng,p.lat])}catch(e){}
-    if(!px||!isFinite(px.x)||!isFinite(px.y)){addMarker(p);return}
-    var key=Math.floor(px.x/cell)+','+Math.floor(px.y/cell);
-    (buckets[key]=buckets[key]||[]).push(p);
-  });
-  Object.keys(buckets).forEach(function(k){
-    var g=buckets[k];
-    if(g.length===1){addMarker(g[0]);return}
-    var cl=0,cn=0;g.forEach(function(p){cl+=+p.lng;cn+=+p.lat});
-    cl/=g.length;cn/=g.length;
-    var el=document.createElement('button');el.type='button';el.className='pinCluster';el.textContent=g.length;
-    el.title=g.map(function(p){return p.name||''}).join('、');
-    el.addEventListener('click',function(ev){ev.stopPropagation();mapLib.easeTo({center:[cl,cn],zoom:Math.min(mapLib.getZoom()+3,17),duration:500})});
-    pinMarkers.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([cl,cn]).addTo(mapLib));
-  });
-  if(!fitted&&pts.length){
-    var b=pts.reduce(function(acc,c){return acc.extend(c)},new maplibregl.LngLatBounds(pts[0],pts[0]));
-    mapLib.fitBounds(b,{padding:80,maxZoom:15,duration:0});
-    fitted=true;
-  }
-  if(!mapLib.__pinHook){mapLib.__pinHook=true;mapLib.on('moveend',function(){renderMarkers()})}
+/* __MR_BEGIN__ */
+var markerBusy=false,fitPending=false;
+function fitToPins(pts){
+  if(fitPending||!pts||!pts.length)return;
+  fitPending=true;
+  setTimeout(function(){
+    fitPending=false;
+    if(!mapLib||!pts.length)return;
+    try{
+      var b=pts.reduce(function(acc,c){return acc.extend(c)},new maplibregl.LngLatBounds(pts[0],pts[0]));
+      mapLib.fitBounds(b,{padding:80,maxZoom:15,duration:0});
+    }catch(e){}
+  },0);
 }
+function renderMarkers(){
+  if(!mapLib||markerBusy)return;
+  markerBusy=true;
+  var next=[];
+  try{
+    var list=filtered().filter(function(p){return p.lat!=null&&p.lng!=null});
+    var pts=list.map(function(p){return [p.lng,p.lat]});
+    var items=list.map(function(p,i){
+      var px=null;try{px=mapLib.project([p.lng,p.lat])}catch(e){}
+      if(!px||!isFinite(px.x)||!isFinite(px.y))return {i:i,x:null,y:null};
+      return {i:i,x:px.x,y:px.y};
+    });
+    function addPin(p){
+      var el=document.createElement('button');el.type='button';
+      var theme=isSharedMode()?memberTheme(ownerUidOf(p)):null;
+      el.className='pin'+(theme?(' '+theme.key):'');
+      el.style.setProperty('--c',stColor(p.status));
+      el.style.setProperty('--cc',catColor(p.cat));
+      el.title=p.name||'';
+      el.setAttribute('aria-label',p.name||'圖釘');
+      el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
+      var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
+      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom'}).setLngLat([p.lng,p.lat]).addTo(mapLib));
+    }
+    function addCluster(g){
+      var cl=0,cn=0;g.forEach(function(it){cl+=+list[it.i].lng;cn+=+list[it.i].lat});
+      cl/=g.length;cn/=g.length;
+      var el=document.createElement('button');el.type='button';el.className='pinCluster';el.textContent=g.length;
+      el.title=g.map(function(it){return list[it.i].name||''}).join('、');
+      el.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        var z=17;try{z=Math.min(mapLib.getZoom()+3,mapLib.getMaxZoom())}catch(e2){}
+        mapLib.easeTo({center:[cl,cn],zoom:z,duration:500});
+      });
+      next.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([cl,cn]).addTo(mapLib));
+    }
+    /* 用距離分群（不是切格子）：平移/縮放時分組穩定，數字不會亂跳 */
+    var cell=40,groups=[],gcell={};
+    items.forEach(function(it){
+      if(it.x==null){groups.push({cx:null,cy:null,g:[it]});return}
+      var gx=Math.floor(it.x/cell),gy=Math.floor(it.y/cell),cand=[],seen={};
+      for(var ox=-1;ox<=1;ox++)for(var oy=-1;oy<=1;oy++){
+        var bucket=gcell[(gx+ox)+','+(gy+oy)];
+        if(!bucket)continue;
+        for(var q=0;q<bucket.length;q++){var gi=bucket[q];if(seen[gi])continue;seen[gi]=1;cand.push(gi)}
+      }
+      var best=-1,bd=cell*cell;
+      for(var j=0;j<cand.length;j++){
+        var gr=groups[cand[j]];if(gr.cx==null)continue;
+        var dx=it.x-gr.cx,dy=it.y-gr.cy,d=dx*dx+dy*dy;
+        if(d<bd){bd=d;best=cand[j]}
+      }
+      var target;
+      if(best>=0){
+        target=groups[best];
+        var n=target.g.length;
+        target.cx=(target.cx*n+it.x)/(n+1);target.cy=(target.cy*n+it.y)/(n+1);
+        target.g.push(it);
+      }else{
+        target={cx:it.x,cy:it.y,g:[it]};groups.push(target);best=groups.length-1;
+      }
+      var nk=Math.floor(target.cx/cell)+','+Math.floor(target.cy/cell);
+      (gcell[nk]=gcell[nk]||[]).push(best);
+    });
+    groups.forEach(function(gr){if(gr.g.length===1)addPin(list[gr.g[0].i]);else addCluster(gr.g)});
+    pinMarkers.forEach(function(m){try{m.remove()}catch(e){}});
+    pinMarkers=next;
+    if(!fitted&&pts.length){fitted=true;fitToPins(pts)}
+  }catch(e){
+    try{if(window.console&&console.warn)console.warn('renderMarkers 略過一次錯誤：',e)}catch(e2){}
+  }
+  markerBusy=false;
+  if(!mapLib.__pinHook){
+    mapLib.__pinHook=true;
+    mapLib.on('moveend',function(){try{renderMarkers()}catch(e){}});
+  }
+}
+/* __MR_END__ */
 
 /* ---------- 清單 ---------- */
 function cardHtml(p){
@@ -2500,7 +2558,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v116';
+var APP_VER='v117';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -3132,6 +3190,7 @@ else if(h.indexOf('error=')>=0){history.replaceState(null,'',location.pathname+l
 try{if(!localStorage.getItem(KEY+'_acctHint')){localStorage.setItem(KEY+'_acctHint','1');setTimeout(function(){toast('右上角頭像：登入 Google 開雲端同步，或下載／還原備份')},1100)}}catch(e){}
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
