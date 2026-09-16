@@ -415,6 +415,12 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 #syncChip{width:9px;height:9px;border-radius:50%;background:#B9B5A4;flex:0 0 auto}
 #syncChip.syncing{background:#E9A319;animation:pulse 1s infinite}
 #syncChip.ok{background:#1F7A6B}#syncChip.err{background:#B3351E}
+.topState{font-size:11.5px;line-height:1;border-radius:999px;padding:7px 10px;border:1px solid var(--line);background:#F3F1E7;color:var(--ink2);white-space:nowrap}
+.topState.syncing{background:#FDF3DC;border-color:#E8D39B;color:#9A6A00}
+.topState.ok{background:#E8F3ED;border-color:#C8DDD1;color:#1F4D3F}
+.topState.err{background:#FCEDEA;border-color:#E8C0B9;color:#B3351E}
+.topState.local,.topState.guest{background:#F7F0D8;border-color:#E7D8A5;color:#7C6420}
+@media (max-width:640px){.topState{max-width:150px;overflow:hidden;text-overflow:ellipsis}}
 @keyframes pulse{50%{opacity:.35}}
 .fieldWrap{position:relative;display:block}.clrBtn{position:absolute;right:8px;top:14px;width:26px;height:26px;border:none;border-radius:50%;background:rgba(0,0,0,.08);color:#6b665a;font-size:15px;line-height:1;cursor:pointer;padding:0;z-index:2}.clrBtn:active{background:rgba(0,0,0,.18)}.clrTa{top:18px}
 </style>
@@ -463,6 +469,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
       </button>
       <button class="avatar" id="avatarBtn" aria-label="帳號"></button>
       <span id="syncChip" class="syncChip hide" title="雲端同步狀態"></span>
+      <span id="topState" class="topState">尚未登入｜個人地圖</span>
     </div>
   </header>
 
@@ -2037,7 +2044,7 @@ function enterApp(){
   $('#app').classList.remove('hide');
   initMainMap();
   renderAll();
-  renderAvatar();
+  renderAcctUI();
 }
 $('#googleBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp();toast('示範登入完成（真實版會走真正的 Google 帳號）')});
 $('#guestBtn').addEventListener('click',function(){S.user={name:'訪客'};persist();enterApp()});
@@ -2055,13 +2062,23 @@ function askCsec(after){
   var ov=document.querySelector('#chipEditOverlay .ceCard');
   if(ov)ov.insertAdjacentHTML('beforeend','<div style="font-size:12px;color:#8A8674;margin-top:10px">貼上「用戶端密碼」：Google Cloud Console → API 和服務 → 憑證 → 點你的 OAuth 用戶端 → 右側「用戶端密碼」按複製。</div>');
 }
+function sourceLabel(st){return ({syncing:'雲端同步中',ok:'雲端資料',err:'同步異常',local:'訪客本機',guest:'尚未登入',off:'本機資料'})[st]||((AUTH&&AUTH.user)?'雲端資料':'本機資料')}
+function mapLabel(){return S.sharedRoom?'共用地圖':'個人地圖'}
+function renderTopState(st){
+  var el=document.querySelector('#topState');if(!el)return;
+  var cur=st||((AUTH&&AUTH.user)?'syncing':((S.pins&&S.pins.length)?'local':'guest'));
+  el.className='topState '+cur;
+  el.textContent=sourceLabel(cur)+'｜'+mapLabel();
+  el.title='資料來源：'+sourceLabel(cur)+'；目前模式：'+mapLabel();
+}
 function setSync(st,extra){
   var c=document.querySelector('#syncChip');if(c){c.className='syncChip'+(st==='off'?' hide':' '+st);c.title={syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗',local:'訪客模式（資料只在這台裝置）',guest:'訪客模式（尚未登入）'}[st]||''}
   var r=document.querySelector('#mSyncRow');
   if(r){
     var tail=({syncing:'雲端同步中…',ok:'雲端已同步'+(extra?' '+extra:''),err:'雲端同步失敗（稍後自動再試）',local:'訪客模式',guest:'尚未登入',off:'未同步（僅本機）'})[st]||'';
-    r.textContent=tail;
+    r.textContent=tail+' · '+mapLabel();
   }
+  renderTopState(st);
 }
 function loadGsi(cb){
   if(window.google&&google.accounts&&google.accounts.oauth2)return cb();
@@ -2295,7 +2312,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v110';
+var APP_VER='v112';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2467,6 +2484,7 @@ function renderAcctUI(){
   var r2=document.querySelector('#mFb');if(r2)r2.textContent=AUTH.user?'帳號':'登入';
   renderAvatar();
   setSync(AUTH.user?'syncing':((S.pins&&S.pins.length)?'local':'guest'));
+  renderTopState(AUTH.user?'syncing':((S.pins&&S.pins.length)?'local':'guest'));
 }
 function fbProfilePush(){
   if(!FB.db||!AUTH.user)return;
@@ -2680,6 +2698,7 @@ function wsSwitch(code,cb){
       var d=s.val();
       if(d)fbApply(d,true);else fbPush();
       renderAll();
+      renderAcctUI();
       fbListen();
       toast(code?('已切換到共用地圖（'+code+'）'):('已切回你的個人地圖'));
       if(cb)cb();
