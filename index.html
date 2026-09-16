@@ -515,15 +515,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
       </button>
     </div>
 
-    <div id="textPane">
-      <label class="lb" for="fText">貼上文字（選填，只當備忘）</label>
-      <textarea class="txt batchArea" id="fText" placeholder="例如：
-店名：OO 燒肉
-地址：OO 縣 OO 區 OO 路 100 號
-營業時間：OO:OO~OO:OO
-心得寫在這裡"></textarea>
-      <input type="file" id="importFile" accept=".json,application/json" class="hide">
-    </div>
+    <input type="file" id="importFile" accept=".json,application/json" class="hide">
 
     <label class="lb" for="fName">店名 / 地點名稱</label>
       <span class="fieldWrap"><input class="txt" id="fName" type="text" placeholder="例如：OO 燒肉"><button type="button" class="clrBtn" data-clr="fName" aria-label="清空店名">×</button></span>
@@ -1309,7 +1301,6 @@ function openPin(id){
   renderPageEditor();
   $('#fNote').value=p?(p.note||''):'';
   renderFolderOptions(p?(p.folder||''):'');
-  $('#fText').value='';
   var pv=p?(p.price||''):'';
   if(pv&&pv!=='$'&&pv!=='$$'&&pv!=='$$$'){$('#fPrice').value='__custom';$('#priceCustomWrap').classList.remove('hide');$('#fPriceCustom').value=pv}
   else{$('#fPrice').value=pv;$('#priceCustomWrap').classList.add('hide');$('#fPriceCustom').value=''}
@@ -1798,7 +1789,6 @@ $('#saveBtn').addEventListener('click',function(){
   var name=$('#fName').value.trim();
   var addrInput=$('#fAddr').value.trim();
   var url=$('#fUrl').value.trim();
-  ocrRememberFixes($('#fText').value.trim(),{name:name,addr:addrInput,phone:($('#fIntro').value.match(/(?:\+886[-\s]?)?0?9\d{2}[-\s]?\d{3}[-\s]?\d{3}|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{3,4}/)||[''])[0]||'',metro:($('#fIntro').value.match(/捷運.{0,10}站/)||[''])[0]||''});
   if(!name&&!url&&!addrInput){toast('至少填店名、地址或網址');return}
   var btn=this;
   function finish(){btn.disabled=false;btn.textContent='釘起來'}
@@ -1831,14 +1821,11 @@ $('#saveBtn').addEventListener('click',function(){
     btn.disabled=true;btn.textContent='定位中…';
     geocode(locQ).then(function(res){
       if(res&&res.length){
-        var picked=res[0],strictAddr=addrInput&&/(路|街|巷|弄|大道|段).{0,12}\d{1,4}(之\d+)?號|\d{1,4}(之\d+)?號/.test(addrInput);
-        if(strictAddr&&!addrStrongMatch(addrInput,picked.display_name))toast('地址定位結果和你輸入的不一致，這次不自動亂放位置；你可直接點下面地圖手動定位');
-        else{
-          S.draft={lat:+(+picked.lat).toFixed(6),lng:+(+picked.lon).toFixed(6)};
-          if(!$('#fAddr').value.trim())$('#fAddr').value=cleanAddr(picked.display_name);
-        }
-      }else toast('「'+(locQ.length>12?locQ.slice(0,12)+'…':locQ)+'」查不到位置 — 已先存起來，編輯時可再搜完整地址或點小地圖定位');
-    }).catch(function(){toast('定位服務連不上（聊天預覽視窗會這樣）— 已先存起來，下載後開檔案再補位置')}).then(function(){doSave();finish()});
+        var picked=res[0];
+        S.draft={lat:+(+picked.lat).toFixed(6),lng:+(+picked.lon).toFixed(6)};
+        if(!$('#fAddr').value.trim())$('#fAddr').value=cleanAddr(picked.display_name);
+      }
+    }).catch(function(){}).then(function(){doSave();finish()});
     return;
   }
   doSave();
@@ -2308,7 +2295,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v109';
+var APP_VER='v110';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
