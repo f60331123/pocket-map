@@ -657,11 +657,13 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
-.pinwrap{background:none;border:none}
-.pin{position:relative;width:24px;height:24px;background:var(--c);border:2.5px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
-.pin::after{content:'';position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:var(--cc,#fff);border:1.5px solid rgba(255,255,255,.9)}
+.pinwrap{position:relative;display:block;width:24px;height:31px;background:none;border:none;padding:0}
+.pin{position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--c);border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
+.pin::before{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--c)}
+.pin::after{content:'';position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:var(--cc,#fff);border:1.5px solid rgba(255,255,255,.9);z-index:1}
 .pin.rabbit{box-shadow:0 3px 8px rgba(0,0,0,.35),0 0 0 3px #E98AB4}
 .pin.bear{box-shadow:0 3px 8px rgba(0,0,0,.35),0 0 0 3px #8A5A3B}
+.pinCluster{width:34px;height:34px;border-radius:50%;background:var(--ink,#3A3A34);color:#fff;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
 .pp .pp-foot{flex-wrap:wrap}
 </style>
 <script>
@@ -731,7 +733,7 @@ function memberIdsForRoom(p){
 }
 function memberTheme(uid){
   var creator=roomCreatorUid(),rabbit=!creator||uid===creator;
-  return rabbit?{key:'rabbit',label:'建立者',color:'#E98AB4',soft:'#FBE6F0',ink:'#9C466B'}:{key:'bear',label:'對方',color:'#8A5A3B',soft:'#F4E7DD',ink:'#6C4730'};
+  return rabbit?{key:'rabbit',label:'建立者',color:'#E98AB4',soft:'#FBE6F0',ink:'#9C466B'}:{key:'bear',label:'隊友',color:'#8A5A3B',soft:'#F4E7DD',ink:'#6C4730'};
 }
 function ownerUidOf(p){return (p&&p.ownerUid)||(AUTH.user&&AUTH.user.uid)||''}
 function ensureSharedPinMeta(p){
@@ -760,20 +762,20 @@ function sharedNotePreview(p){
 function sharedHeartSummary(p){
   if(!isSharedMode())return heartRow(p.rating||0);
   ensureSharedPinMeta(p);
-  return memberIdsForRoom(p).map(function(uid){var th=memberTheme(uid),rt=ratingOf(p,uid);return '<span class="ownerBadge '+th.key+'">'+(AUTH.user&&uid===AUTH.user.uid?'我':'對方')+' '+heartRow(rt||0)+'</span>'}).join('');
+  return memberIdsForRoom(p).map(function(uid){var th=memberTheme(uid),rt=ratingOf(p,uid);return '<span class="ownerBadge '+th.key+'">'+(AUTH.user&&uid===AUTH.user.uid?'我':'隊友')+' '+heartRow(rt||0)+'</span>'}).join('');
 }
 function sharedNotesHtml(p){
   if(!isSharedMode())return '';
   ensureSharedPinMeta(p);
   return memberIdsForRoom(p).map(function(uid){
     var th=memberTheme(uid),txt=noteOf(p,uid),rt=ratingOf(p,uid);
-    return '<div class="sharedNoteBox" style="background:'+th.soft+';border-color:'+th.color+'33"><b style="color:'+th.ink+'">'+(AUTH.user&&uid===AUTH.user.uid?'我的心得':'對方的心得')+'</b><div style="font-size:12.5px;line-height:1.7;color:var(--ink)">'+esc(txt||'還沒寫')+'</div><div class="sharedHeartRow"><span class="ownerBadge '+th.key+'">'+(AUTH.user&&uid===AUTH.user.uid?'我':'對方')+' '+heartRow(rt||0)+'</span></div></div>';
+    return '<div class="sharedNoteBox" style="background:'+th.soft+';border-color:'+th.color+'33"><b style="color:'+th.ink+'">'+(AUTH.user&&uid===AUTH.user.uid?'我的心得':'隊友的心得')+'</b><div style="font-size:12.5px;line-height:1.7;color:var(--ink)">'+esc(txt||'')+'</div><div class="sharedHeartRow"><span class="ownerBadge '+th.key+'">'+(AUTH.user&&uid===AUTH.user.uid?'我':'隊友')+' '+heartRow(rt||0)+'</span></div></div>';
   }).join('');
 }
 function pinOwnerBadge(p){
   if(!isSharedMode())return '';
   var th=memberTheme(ownerUidOf(p));
-  return '<span class="ownerBadge '+th.key+'">'+(AUTH.user&&ownerUidOf(p)===AUTH.user.uid?'我放進來':'對方放進來')+'</span>';
+  return '<span class="ownerBadge '+th.key+'">'+(AUTH.user&&ownerUidOf(p)===AUTH.user.uid?'我放進來':'隊友置入')+'</span>';
 }
 function pinSearchText(p){
   var base=((p.name||'')+' '+(p.note||'')+' '+(p.url||''));
@@ -1122,9 +1124,7 @@ function renderMarkers(){
   if(!mapLib)return;
   pinMarkers.forEach(function(m){m.remove()});pinMarkers=[];
   var pts=[];
-  filtered().forEach(function(p){
-    if(p.lat==null||p.lng==null)return;
-    pts.push([p.lng,p.lat]);
+  function addMarker(p){
     var el=document.createElement('button');el.type='button';
     var theme=isSharedMode()?memberTheme(ownerUidOf(p)):null;
     el.className='pin'+(theme?(' '+theme.key):'');
@@ -1133,14 +1133,34 @@ function renderMarkers(){
     el.title=p.name||'';
     el.setAttribute('aria-label',p.name||'圖釘');
     el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
-    var mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([p.lng,p.lat]).addTo(mapLib);
-    pinMarkers.push(mk);
+    var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
+    pinMarkers.push(new maplibregl.Marker({element:wrap,anchor:'bottom'}).setLngLat([p.lng,p.lat]).addTo(mapLib));
+  }
+  var cell=40,buckets={};
+  filtered().forEach(function(p){
+    if(p.lat==null||p.lng==null)return;
+    pts.push([p.lng,p.lat]);
+    var px=null;try{px=mapLib.project([p.lng,p.lat])}catch(e){}
+    if(!px||!isFinite(px.x)||!isFinite(px.y)){addMarker(p);return}
+    var key=Math.floor(px.x/cell)+','+Math.floor(px.y/cell);
+    (buckets[key]=buckets[key]||[]).push(p);
+  });
+  Object.keys(buckets).forEach(function(k){
+    var g=buckets[k];
+    if(g.length===1){addMarker(g[0]);return}
+    var cl=0,cn=0;g.forEach(function(p){cl+=+p.lng;cn+=+p.lat});
+    cl/=g.length;cn/=g.length;
+    var el=document.createElement('button');el.type='button';el.className='pinCluster';el.textContent=g.length;
+    el.title=g.map(function(p){return p.name||''}).join('、');
+    el.addEventListener('click',function(ev){ev.stopPropagation();mapLib.easeTo({center:[cl,cn],zoom:Math.min(mapLib.getZoom()+3,17),duration:500})});
+    pinMarkers.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([cl,cn]).addTo(mapLib));
   });
   if(!fitted&&pts.length){
     var b=pts.reduce(function(acc,c){return acc.extend(c)},new maplibregl.LngLatBounds(pts[0],pts[0]));
     mapLib.fitBounds(b,{padding:80,maxZoom:15,duration:0});
     fitted=true;
   }
+  if(!mapLib.__pinHook){mapLib.__pinHook=true;mapLib.on('moveend',function(){renderMarkers()})}
 }
 
 /* ---------- 清單 ---------- */
@@ -1916,6 +1936,17 @@ var geoTimer=null;
 function geoSearch(q){return q}
 
 /* ---------- 儲存 / 刪除 / 批次 ---------- */
+function dupKey(s){return String(s||'').toLowerCase().replace(/\s+/g,'')}
+function findDupPin(d){
+  var nk=dupKey(d.name),na=dupKey(d.addr);
+  for(var i=0;i<S.pins.length;i++){var p=S.pins[i],pk=dupKey(p.name),pa=dupKey(p.addr);
+    var sameName=!!(nk&&pk&&nk===pk),sameAddr=!!(na&&pa&&na===pa);
+    var near=d.lat!=null&&p.lat!=null&&Math.abs(+p.lat-d.lat)<0.0005&&Math.abs(+p.lng-d.lng)<0.0005;
+    if(near&&(sameName||sameAddr))return p;
+    if(sameName&&sameAddr)return p;
+  }
+  return null;
+}
 $('#saveBtn').addEventListener('click',function(){
   var name=$('#fName').value.trim();
   var addrInput=$('#fAddr').value.trim();
@@ -1933,6 +1964,7 @@ $('#saveBtn').addEventListener('click',function(){
       addr:cleanAddr(addrInput),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
     };
     var saved;
+    if(!S.editing){var dup=findDupPin(data);if(dup){finish();toast('已經釘過了：「'+(dup.name||'未命名')+'」— 同一個地方不能重複釘');return}}
     if(isSharedMode()){
       var uid=AUTH.user&&AUTH.user.uid;
       if(!uid){toast('請先登入');finish();return}
@@ -2468,7 +2500,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v115';
+var APP_VER='v116';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -3007,7 +3039,7 @@ function sharedUI(){
     if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:4px 0">目前還沒有共用地圖；按上面的按鈕就能建立或加入。</div>';
     rooms.forEach(function(rm,i){
       var cur=S.sharedRoom===rm.code,nm=wsDefaultRoomName(rm,i),fs=nm.length<=4?15:(nm.length<=5?14:13),arch=!!rm.archivedAt;
-      h+='<div style="display:flex;gap:6px;align-items:center;margin:6px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>'+(arch?'📦':'👥')+'</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><div style="display:flex;flex-direction:column;gap:4px">'+(arch?'<button type="button" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#F8F4EA;font-size:12px;color:#7C6420">封存</button>':'<button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:6px 8px">解除綁定</button>')+'</div></div>';
+      h+='<div style="display:flex;gap:6px;align-items:center;margin:6px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>'+(arch?'📦':'👥')+'</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><div style="display:flex;flex-direction:column;gap:4px">'+(arch?'<button type="button" class="danger" data-wsdel="'+rm.code+'" style="padding:6px 8px">永久刪除</button>':'<button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:6px 8px">解除綁定</button>')+'</div></div>';
     });
     h+='</div>';
     if(S.sharedRoom){
@@ -3031,6 +3063,16 @@ function sharedUI(){
         if(S.sharedRoom===code)wsSwitch('',function(){hydrated=false;render();toast('已解除綁定，舊地圖已封存')});
         else{hydrated=false;render();toast('已解除綁定，舊地圖已封存')}
       }).catch(function(e){toast('解除綁定失敗：'+((e&&e.message)||e))});
+    })});
+    ov.querySelectorAll('[data-wsdel]').forEach(function(b){b.addEventListener('click',function(){
+      var code=b.dataset.wsdel,rm=wsRoomObj(code);if(!rm||!AUTH.user)return;
+      if(!window.confirm('確定要永久刪除「'+(rm.name||'共用地圖')+'」嗎？\n雲端上這張共用地圖會整個消失。'))return;
+      if(!window.confirm('刪除就真的什麼都沒有囉～\n圖釘、心得、愛心全部不會恢復。確定嗎？'))return;
+      FB.db.ref('shared/'+code).remove().then(function(){
+        wsRemoveRoom(code);
+        if(S.sharedRoom===code)wsSwitch('',function(){hydrated=false;render();toast('已永久刪除這張共用地圖')});
+        else{hydrated=false;render();toast('已永久刪除這張共用地圖')}
+      }).catch(function(e){toast('永久刪除失敗：'+((e&&e.message)||e))});
     })});
     if(!skipHydrate&&!hydrated){hydrated=true;wsHydrateRooms(function(){if(document.body.contains(ov))render(true)})}
   }
