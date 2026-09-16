@@ -1632,7 +1632,7 @@ $('#ocrFile').addEventListener('change',function(){
   oh('讀取圖片中…');
   var rd=new FileReader();
   rd.onload=function(){
-    openOcrCrop(rd.result,function(cropped){ocrRun(cropped,oh)},function(){oh('已取消 — 重選圖片可再框選')});
+    openOcrCrop(rd.result,function(cropped){oh('讀取中… 正在擷取圖片');ocrRun(cropped,oh)},function(){oh('已取消 — 重選圖片可再框選')});
   };
   rd.onerror=function(){ocrBusy=false;oh('圖片讀取失敗')};
   rd.readAsDataURL(f);
@@ -1670,7 +1670,7 @@ function openOcrCrop(dataUrl,onOk,onCancel){
   wrap.addEventListener('pointerup',endDrag);
   wrap.addEventListener('pointercancel',endDrag);
   ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
-  okBtn.addEventListener('click',function(){if(!rect)return;stateTxt.textContent='已確認框選，正在讀取圖片…';okBtn.textContent='讀取中…';okBtn.disabled=true;go.click()});
+  okBtn.addEventListener('click',function(){if(!rect)return;stateTxt.textContent='讀取中… 正在擷取你框選的圖片，請稍候';okBtn.textContent='讀取中…';okBtn.disabled=true;go.click()});
   go.addEventListener('click',function(){
     if(!rect)return;
     var im=new Image();
@@ -1680,8 +1680,8 @@ function openOcrCrop(dataUrl,onOk,onCancel){
       var cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(sw*sc));cv.height=Math.max(1,Math.round(sh*sc));
       var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';
       cx.drawImage(im,sx,sy,sw,sh,0,0,cv.width,cv.height);
-      stateTxt.textContent='已擷取完成，開始辨識文字…';
-      setTimeout(function(){ov.remove();onOk(cv.toDataURL('image/png'))},180);
+      stateTxt.textContent='讀取中… 已擷取完成，開始辨識文字';
+      setTimeout(function(){ov.remove();onOk(cv.toDataURL('image/png'))},320);
     };
     im.onerror=function(){ov.remove();onOk(dataUrl)};
     im.src=dataUrl;
