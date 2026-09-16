@@ -1868,18 +1868,33 @@ function nomGeo(q){
       return {lat:r.lat,lon:r.lon,display_name:r.display_name+' 〖OSM 街級〗'};})});
 }
 var geoNetErr=false;
-function geocode(q0){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';var shop=String(q0||'').replace(/[^\u4e00-\u9fffA-Za-z0-9]/g,'').replace(/[\u53f0\u81fa][^A-Za-z0-9]{0,4}[\u5e02\u7e23]$/,'');
-  var q=q0;if(city&&q0&&!/\u5e02|\u7e23/.test(q0.slice(-6)))q=q0+', '+city;
+function geocode(q0){var cs=document.getElementById('citySel');var city=cs&&cs.value&&cs.value!=='不限'?cs.value:'';var raw=String(q0||'').trim();var shop=raw.replace(/[^\u4e00-\u9fffA-Za-z0-9]/g,'').replace(/[\u53f0\u81fa][^A-Za-z0-9]{0,4}[\u5e02\u7e23]$/,'');
+  var q=raw;if(city&&raw&&!/\u5e02|\u7e23/.test(raw.slice(-6)))q=raw+', '+city;
   geoNetErr=false;
+  var isAddrQuery=/(路|街|巷|弄|大道|段).{0,12}\d{1,4}(之\d+)?號|\d{1,4}(之\d+)?號/.test(raw);
+  var addrNeedles=(cleanAddr(raw).match(/[\u4e00-\u9fff0-9]+(?:市|縣|區|鄉|鎮|里|村|路|街|巷|弄|段|號)/g)||[]).filter(Boolean);
   var jobs=[arcGeo(q).catch(function(){geoNetErr=true;return[]}),nomGeo(q).catch(function(){return[]}),photonGeo(q).catch(function(){return[]})];
-  if(shop.length>=2)jobs.push(new Promise(function(res){setTimeout(res,350)}).then(function(){return nomGeo(shop+' '+(city||'台灣')).catch(function(){return[]})}));
+  if(shop.length>=2&&!isAddrQuery)jobs.push(new Promise(function(res){setTimeout(res,350)}).then(function(){return nomGeo(shop+' '+(city||'台灣')).catch(function(){return[]})}));
   return Promise.all(jobs).then(function(rs){
     var all=normGeo(rs[0].concat(rs[1],rs[2],rs[3]||[]));
-    if(shop.length<2||!all.length)return all;
+    if(!all.length)return all;
     var hasRoad=function(s){return /(路|街|巷|弄|大道|段|號)/.test(String(s))};
-    var hit=all.filter(function(r){var n=r.display_name.replace(/[^\u4e00-\u9fff]/g,'');if(!n)return false;for(var i=0;i+1<shop.length;i++)if(n.indexOf(shop.substr(i,2))>=0)return true;return false});
-    var rest=all.filter(function(r){return hit.indexOf(r)<0&&hasRoad(r.display_name)});
-    return hit.concat(rest);
+    var score=function(r){
+      var s=String(r.display_name||''),n=s.replace(/[^\u4e00-\u9fff0-9]/g,''),pt=0;
+      if(isAddrQuery){
+        addrNeedles.forEach(function(k){if(k&&s.indexOf(k)>=0)pt+=8});
+        var num=raw.match(/\d{1,4}(?:之\d+)?號/);if(num&&s.indexOf(num[0])>=0)pt+=14;
+        var road=raw.match(/[\u4e00-\u9fff]{1,12}(?:路|街|巷|弄|大道|段)/);if(road&&s.indexOf(road[0])>=0)pt+=14;
+        var dist=raw.match(/[\u4e00-\u9fff]{1,6}(?:區|鄉|鎮|市)/);if(dist&&s.indexOf(dist[0])>=0)pt+=16;
+        var citym=raw.match(/[\u4e00-\u9fff]{1,6}(?:市|縣)/);if(citym&&s.indexOf(citym[0])>=0)pt+=12;
+        if(hasRoad(s))pt+=3;
+      }else if(shop.length>=2){
+        for(var i=0;i+1<shop.length;i++)if(n.indexOf(shop.substr(i,2))>=0)pt+=2;
+        if(hasRoad(s))pt+=2;
+      }
+      return pt;
+    };
+    return all.map(function(r){return {r:r,pt:score(r)}}).sort(function(a,b){return b.pt-a.pt}).map(function(x){return x.r});
   });
 }
 
@@ -1955,16 +1970,15 @@ $('#textParseBtn').addEventListener('click',function(){
       b.addEventListener('click',function(){
         S.draft={lat:+(+item.r.lat).toFixed(6),lng:+(+item.r.lon).toFixed(6)};
         var used={};addr.slice(0,2).forEach(function(l){used[l]=1});if(shop[0])used[shop[0]]=1;
-            var rest=lines.filter(function(l){return !used[l]&&l!==item.r.display_name&&!ocrJunkLine(l)}).join('\n');
-        var fg2=fmtGeo(item.r);
-            fillAddrSmart(item.r);
-            if(!$('#fName').value.trim())$('#fName').value=fg2.name||shop[0]||'';
-            if(!$('#fIntro').value.trim())$('#fIntro').value=stripUrl(rest);
-        
+        var rest=lines.filter(function(l){return !used[l]&&l!==item.r.display_name&&!ocrJunkLine(l)}).join('\n');
+        var fg2=fmtGeo(item.r),manualAddr=$('#fAddr').value.trim(),pickedAddr=cleanAddr(addr[0]||manualAddr||fg2.addr||'');
+        if(pickedAddr)$('#fAddr').value=pickedAddr;else fillAddrSmart(item.r);
+        if(!$('#fName').value.trim())$('#fName').value=shop[0]||fg2.name||pickedAddr||'';
+        if(!$('#fIntro').value.trim())$('#fIntro').value=stripUrl(rest);
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
         updateCoordTxt();
         list.classList.remove('show');
-        toast('已定位，按「釘起來」完成');nudgeSave('#fName');
+        toast('已定位，會以你目前填的地址為主');nudgeSave('#fAddr');
       });
       list.appendChild(b);
     });
@@ -1999,10 +2013,10 @@ function geoSearch(q){
       }
       b.addEventListener('click',function(){
         S.draft={lat:+(+r.lat).toFixed(6),lng:+(+r.lon).toFixed(6)};
-        var fg=fmtGeo(r);
-        fillAddrSmart(r);
-        if(fg.name&&!$('#fName').value.trim())$('#fName').value=fg.name;else if(!fg.name)revGeoName(+r.lat,+r.lng);
-        nudgeSave('#fName');
+        var fg=fmtGeo(r),manualAddr=$('#fAddr').value.trim();
+        if(!manualAddr)fillAddrSmart(r);
+        if(fg.name&&!$('#fName').value.trim())$('#fName').value=fg.name;else if(!fg.name&&!manualAddr)revGeoName(+r.lat,+r.lng);
+        nudgeSave(manualAddr?'#fAddr':'#fName');
         if(miniMapLib){placeMiniMark();miniMapLib.jumpTo({center:[S.draft.lng,S.draft.lat],zoom:16})}
         updateCoordTxt();
         list.classList.remove('show');
@@ -2016,18 +2030,19 @@ function geoSearch(q){
 /* ---------- 儲存 / 刪除 / 批次 ---------- */
 $('#saveBtn').addEventListener('click',function(){
   var name=$('#fName').value.trim();
+  var addrInput=$('#fAddr').value.trim();
   var url=$('#fUrl').value.trim();
-  ocrRememberFixes($('#fText').value.trim(),{name:name,addr:$('#fAddr').value.trim(),phone:($('#fIntro').value.match(/(?:\+886[-\s]?)?0?9\d{2}[-\s]?\d{3}[-\s]?\d{3}|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{3,4}/)||[''])[0]||'',metro:($('#fIntro').value.match(/捷運.{0,10}站/)||[''])[0]||''});
-  if(!name&&!url){toast('至少填店名或網址');return}
+  ocrRememberFixes($('#fText').value.trim(),{name:name,addr:addrInput,phone:($('#fIntro').value.match(/(?:\+886[-\s]?)?0?9\d{2}[-\s]?\d{3}[-\s]?\d{3}|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{3,4}/)||[''])[0]||'',metro:($('#fIntro').value.match(/捷運.{0,10}站/)||[''])[0]||''});
+  if(!name&&!url&&!addrInput){toast('至少填店名、地址或網址');return}
   var btn=this;
   function finish(){btn.disabled=false;btn.textContent='釘起來'}
   function doSave(){
     var sel=$('#fCats .catChip.on');
     var data={
-      name:name||hostOf(url),url:url,cat:(S.draftCat||(sel?sel.dataset.id:'food')),
+      name:name||cleanAddr(addrInput)||hostOf(url)||'未命名地點',url:url,cat:(S.draftCat||(sel?sel.dataset.id:'food')),
       updated:Date.now(),status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
       price:priceVal(),pages:$$('#pagesBox textarea').map(function(t){return t.value.trim()}).filter(Boolean),pub:$('#fPub').checked,
-      addr:cleanAddr($('#fAddr').value),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
+      addr:cleanAddr(addrInput),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
     };
     var saved;
     if(S.editing){
@@ -2045,13 +2060,15 @@ $('#saveBtn').addEventListener('click',function(){
       setTimeout(function(){openPopupFor(saved)},650);
     }
   }
-  var locQ=name||$('#fGeo').value.trim();
+  var locQ=addrInput||name||$('#fGeo').value.trim();
   if(S.draft.lat==null&&locQ){
     btn.disabled=true;btn.textContent='定位中…';
     geocode(locQ).then(function(res){
-      if(res&&res.length){S.draft={lat:+(+res[0].lat).toFixed(6),lng:+(+res[0].lon).toFixed(6)};if(!$('#fAddr').value.trim())$('#fAddr').value=cleanAddr(res[0].display_name)}
-      else toast('「'+(locQ.length>12?locQ.slice(0,12)+'…':locQ)+'」查不到位置 — 已存起來，編輯時搜完整地址或點小地圖定位');
-    }).catch(function(){toast('定位服務連不上（聊天預覽視窗會這樣）— 已存起來，下載後開檔案再補位置')}).then(function(){finish();doSave()});
+      if(res&&res.length){
+        S.draft={lat:+(+res[0].lat).toFixed(6),lng:+(+res[0].lon).toFixed(6)};
+        if(!$('#fAddr').value.trim())$('#fAddr').value=cleanAddr(res[0].display_name);
+      }else toast('「'+(locQ.length>12?locQ.slice(0,12)+'…':locQ)+'」查不到位置 — 已先存起來，編輯時可再搜完整地址或點小地圖定位');
+    }).catch(function(){toast('定位服務連不上（聊天預覽視窗會這樣）— 已先存起來，下載後開檔案再補位置')}).then(function(){doSave();finish()});
     return;
   }
   doSave();
@@ -2521,7 +2538,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v105';
+var APP_VER='v107';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
