@@ -2802,7 +2802,7 @@ function wsQuickAdd(onDone){
       +'</div>'
       +'<div class="ceBtns"><button type="button" id="wsAddCancel">取消</button><button type="button" class="primary" id="wsDoDone">'+(createOn?'完成並建立':'完成並加入')+'</button></div></div>';
     document.getElementById('wsModeCreate').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();mode='create';render()});
-    document.getElementById('wsModeJoin').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();joinCode=(document.getElementById('wsDlgCode')?document.getElementById('wsDlgCode').value:'').trim();mode='join';render()});
+    document.getElementById('wsModeJoin').addEventListener('click',function(){nameTxt=(document.getElementById('wsDlgName').value||'').trim();joinCode='';mode='join';render()});
     document.getElementById('wsAddCancel').addEventListener('click',close);
     var copyBtn=document.getElementById('wsCopyCode');
     if(copyBtn)copyBtn.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(createCode).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
