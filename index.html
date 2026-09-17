@@ -660,7 +660,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
-.pinwrap{position:relative;display:block;width:24px;height:31px;background:none;border:none;padding:0}
+.pinwrap{position:relative;display:block;width:24px;height:27.5px;background:none;border:none;padding:0}
 .pin{position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--c);border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
 .pin::before{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--c)}
 .pin::after{content:'';position:absolute;left:7px;top:7px;width:8px;height:8px;border-radius:50%;background:var(--cc,#fff);border:1.5px solid rgba(255,255,255,.9);z-index:1}
@@ -1204,7 +1204,7 @@ function renderMarkers(){
       el.setAttribute('aria-label',p.name||'圖釘');
       el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
       var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
-      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true}).setLngLat([p.lng,p.lat]).addTo(mapLib));
+      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true,offset:[0,3.5]}).setLngLat([p.lng,p.lat]).addTo(mapLib));
     }
     function addCluster(g){
       var cl=0,cn=0;g.forEach(function(it){cl+=+list[it.i].lng;cn+=+list[it.i].lat});
@@ -2597,7 +2597,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v124';
+var APP_VER='v125';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
