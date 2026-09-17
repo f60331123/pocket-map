@@ -660,11 +660,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
-.clabel{display:flex;align-items:baseline;gap:3px;background:none;border:none;border-radius:0;padding:1px 3px;margin:0;box-shadow:none;font-family:inherit;font-size:13.5px;line-height:1.2;font-weight:800;letter-spacing:.03em;color:#4A4437;cursor:pointer;white-space:nowrap;appearance:none;-webkit-appearance:none;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 4px #fff,0 0 6px rgba(255,255,255,.9)}
-.clabel:hover{color:#23281F;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 5px #fff,0 0 8px #fff}
-.clabel.zero{font-weight:600;color:#7C8273;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 4px rgba(255,255,255,.85)}
-.clabel i{font-style:normal;background:none;color:inherit;border-radius:0;min-width:0;height:auto;display:inline;font-size:11.5px;font-weight:900;padding:0;opacity:.8}
-.clabel.zero i{background:none}
+/* 縣市標籤已改由地圖圖層 ppcounty-label 繪製，不再是 DOM 元素 */
 .pinwrap{position:relative;display:block;width:24px;height:31px;background:none;border:none;padding:0}
 .pin{position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--c);border:2.5px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;appearance:none;-webkit-appearance:none;padding:0}
 .pin::before{content:'';position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--c)}
@@ -946,8 +942,8 @@ var pinMarkers=[],currentPopup=null;
 var STYLES=[
   {name:'OpenFreeMap 彩色中文',style:'https://tiles.openfreemap.org/styles/liberty'},
   {name:'Positron 簡約中文',style:'https://tiles.openfreemap.org/styles/positron'},
-  {name:'Esri 街道圖（文字可能非中文）',style:{version:8,sources:{esri:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'© Esri'}},layers:[{id:'esri',type:'raster',source:'esri'}]}},
-  {name:'Carto 街道圖（文字可能非中文）',style:{version:8,sources:{carto:{type:'raster',tiles:['https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap © CARTO'}},layers:[{id:'carto',type:'raster',source:'carto'}]}}
+  {name:'Esri 街道圖（文字可能非中文）',style:{version:8,glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',sources:{esri:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'© Esri'}},layers:[{id:'esri',type:'raster',source:'esri'}]}},
+  {name:'Carto 街道圖（文字可能非中文）',style:{version:8,glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',sources:{carto:{type:'raster',tiles:['https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap © CARTO'}},layers:[{id:'carto',type:'raster',source:'carto'}]}}
 ];
 var styleIdx=0,errCount=0,loadTimer=null,retryTimer=null,retryN=0;
 var LOAD_WAIT=14000,RETRY_WAIT=25000;
@@ -1022,7 +1018,7 @@ function initMainMap(){
   if(!webglOK()){showFail('這個瀏覽器暫時無法顯示向量地圖（缺 WebGL）。');return}
   try{
     try{var sv=parseInt(localStorage.getItem('pocketPins.basemap'),10);if(sv>=0&&sv<STYLES.length)styleIdx=sv}catch(e){}
-    mapLib=new maplibregl.Map({container:'map',style:STYLES[styleIdx].style,center:[121.5654,25.033],zoom:11,maxZoom:20,attributionControl:{compact:true},dragRotate:false,pitchWithRotate:false});
+    mapLib=new maplibregl.Map({localIdeographFontFamily:'sans-serif',container:'map',style:STYLES[styleIdx].style,center:[121.5654,25.033],zoom:11,maxZoom:20,attributionControl:{compact:true},dragRotate:false,pitchWithRotate:false});
   }catch(e){showFail('這個瀏覽器暫時無法顯示向量地圖。');return}
   mapLib.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
   var cr=mapBox.querySelector('.maplibregl-ctrl-bottom-right');
@@ -1172,7 +1168,10 @@ var TW_COUNTY={"type":"FeatureCollection","features":[{"type":"Feature","propert
 var Z_SPLIT=9.5,countyLock=false,countyOn=false,countyBuilt=false,countyClickBound=false;
 var countyLabels={},countyCache={},COUNTY_MAXZ=12.5;
 var PAPER='#DCD5C0';
-var COUNTY_OFF={'台北市':[-18,-21],'新北市':[16,15],'基隆市':[21,-22],'桃園市':[-20,9],'新竹市':[17,-11],'新竹縣':[-9,16],'嘉義市':[19,-9],'嘉義縣':[-14,11],'苗栗縣':[-15,7],'彰化縣':[-15,9],'雲林縣':[15,11]};
+/* 台灣周邊的紙底補丁（多邊形，不是整張世界蓋掉），所以其他國家照樣看得到 */
+var TW_PATCH={type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[
+ [117.35,22.60],[118.05,20.55],[121.00,19.85],[123.45,21.35],[124.65,23.60],[123.95,26.65],[121.20,27.45],[118.55,26.65],[117.35,22.60]
+]]}};
 function pipRing(ring,lng,lat){var ins=false,m=ring.length-1;for(var k=0;k<ring.length;k++){var xi=ring[k][0],yi=ring[k][1],xj=ring[m][0],yj=ring[m][1];if((yi>lat)!==(yj>lat)&&lng<(xj-xi)*(lat-yi)/(yj-yi)+xi)ins=!ins;m=k}return ins}
 function countyOf(lng,lat){
   if(lng==null||lat==null||!isFinite(lng)||!isFinite(lat))return '';
@@ -1203,30 +1202,43 @@ function countyStats(list){
   for(i=0;i<list.length;i++){c=countyOfPin(list[i]);if(!c)continue;m[c]=(m[c]||0)+1;tot++}
   return {m:m,tot:tot};
 }
+var COUNTY_LIDS=['pppatch','ppcounty-fill','ppcounty-line','ppcounty-nbadge','ppcounty-label'];
 function ensureCountyLayers(){
   if(!mapLib)return;
   try{
     if(mapLib.isStyleLoaded&&!mapLib.isStyleLoaded())return;
-    if(!mapLib.getSource('ppcounty'))mapLib.addSource('ppcounty',{type:'geojson',data:TW_COUNTY});
-    /* 海面／紙底：切片模式下把底圖整個蓋掉，只留一塊塊縣市 */
-    if(!mapLib.getLayer('pppaper')){
-      var _pb=mapLib.getLayer('ppcounty-fill')?'ppcounty-fill':null;
-      if(_pb)mapLib.addLayer({id:'pppaper',type:'background',paint:{'background-color':PAPER}}, _pb);
-      else mapLib.addLayer({id:'pppaper',type:'background',paint:{'background-color':PAPER}});
-      try{mapLib.setLayoutProperty('pppaper','visibility',countyOn?'visible':'none')}catch(e){}
+    if(!mapLib.getSource('pppatch'))mapLib.addSource('pppatch',{type:'geojson',data:TW_PATCH});
+    if(!mapLib.getLayer('pppatch')){
+      var _b=mapLib.getLayer('ppcounty-fill')?'ppcounty-fill':undefined;
+      var _p={id:'pppatch',type:'fill',source:'pppatch',paint:{'fill-color':PAPER,'fill-opacity':1}};
+      if(_b)mapLib.addLayer(_p,_b);else mapLib.addLayer(_p);
     }
+    if(!mapLib.getSource('ppcounty'))mapLib.addSource('ppcounty',{type:'geojson',data:TW_COUNTY});
     if(!mapLib.getLayer('ppcounty-fill'))mapLib.addLayer({id:'ppcounty-fill',type:'fill',source:'ppcounty',paint:{
       'fill-color':['interpolate',['linear'],['coalesce',['get','count'],0],0,'#F7F4EC',1,'#EADFC6',4,'#D6BF91',10,'#BEA063',25,'#9C7A3A'],
       'fill-opacity':1}});
     if(!mapLib.getLayer('ppcounty-line'))mapLib.addLayer({id:'ppcounty-line',type:'line',source:'ppcounty',paint:{'line-color':'#8C7B4A','line-width':1.1,'line-opacity':0.55}});
+    /* 數量徽章：直接重用泡泡用的 ppcN 圖示（缺圖會由 styleimagemissing 自動補畫） */
+    if(!mapLib.getLayer('ppcounty-nbadge'))mapLib.addLayer({id:'ppcounty-nbadge',type:'symbol',source:'ppcounty',
+      filter:['>',['coalesce',['get','count'],0],0],
+      layout:{'icon-image':['concat','ppc',['to-string',['get','count']]],'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-size':1,'icon-offset':[0,16],'symbol-sort-key':['get','count']}});
+    /* 縣市名：由地圖引擎直接畫，跟色塊同一條座標管線，不可能各走各的 */
+    if(!mapLib.getLayer('ppcounty-label'))mapLib.addLayer({id:'ppcounty-label',type:'symbol',source:'ppcounty',
+      layout:{'text-field':['get','n'],'text-font':['Noto Sans Regular'],
+        'text-size':['interpolate',['linear'],['zoom'],5,11.5,7,13,9.5,15.5],
+        'text-allow-overlap':true,'text-ignore-placement':true,'text-padding':2,'text-max-width':6},
+      paint:{'text-color':['case',['>',['coalesce',['get','count'],0],0],'#4A4437','#7C8273'],
+        'text-halo-color':'#FFFFFF','text-halo-width':1.8,'text-halo-blur':0.2}});
     bindCountyClick();
   }catch(e){}
 }
 function bindCountyClick(){
   if(!mapLib||countyClickBound)return;countyClickBound=true;
-  try{mapLib.on('click','ppcounty-fill',function(e){try{if(e&&e.features&&e.features.length)focusCounty(e.features[0].properties.n)}catch(x){}})}catch(e){}
-  try{mapLib.on('mousemove','ppcounty-fill',function(){try{mapLib.getCanvas().style.cursor='pointer'}catch(x){}})}catch(e){}
-  try{mapLib.on('mouseleave','ppcounty-fill',function(){try{mapLib.getCanvas().style.cursor=''}catch(x){}})}catch(e){}
+  ['ppcounty-fill','ppcounty-label'].forEach(function(lid){
+    try{mapLib.on('click',lid,function(e){try{if(e&&e.features&&e.features.length)focusCounty(e.features[0].properties.n)}catch(x){}})}catch(e){}
+    try{mapLib.on('mousemove',lid,function(){try{mapLib.getCanvas().style.cursor='pointer'}catch(x){}})}catch(e){}
+    try{mapLib.on('mouseleave',lid,function(){try{mapLib.getCanvas().style.cursor=''}catch(x){}})}catch(e){}
+  });
 }
 function focusCounty(name){
   if(!mapLib)return;
@@ -1237,34 +1249,14 @@ function focusCounty(name){
   var b=f.properties.b;
   try{mapLib.fitBounds([[b[0],b[1]],[b[2],b[3]]],{padding:36,maxZoom:COUNTY_MAXZ,duration:600})}catch(e){}
 }
-function buildCountyLabels(){
-  if(countyBuilt||!mapLib)return;countyBuilt=true;
-  TW_COUNTY.features.forEach(function(f){
-    var n=f.properties.n;
-    var el=document.createElement('button');el.type='button';el.className='clabel';
-    var b=document.createElement('b');b.textContent=n;el.appendChild(b);
-    var i=document.createElement('i');i.textContent='0';i.style.display='none';el.appendChild(i);
-    el.title=n;el.setAttribute('aria-label',n);
-    el.addEventListener('click',function(ev){ev.stopPropagation();focusCounty(n)});
-    countyLabels[n]={el:el,i:i,mk:new maplibregl.Marker({element:el,anchor:'center',offset:(COUNTY_OFF[n]||[0,0])}).setLngLat(f.properties.p).addTo(mapLib)};
-  });
-}
-function updateCountyLabels(st){
-  Object.keys(countyLabels).forEach(function(n){
-    var o=countyLabels[n],c=st.m[n]||0;
-    o.i.textContent=String(c);
-    o.i.style.display=c?'':'none';
-    o.el.className='clabel'+(c?'':' zero');
-    o.el.title=c?(n+'：'+c+' 個圖釘'):(n+'：還沒有圖釘');
-  });
-}
 function applyCountyVis(){
   if(!mapLib)return;
   try{
     var v=countyOn?'visible':'none';
-    if(mapLib.getLayer('pppaper')&&mapLib.getLayoutProperty('pppaper','visibility')!==v)mapLib.setLayoutProperty('pppaper','visibility',v);
-    if(mapLib.getLayer('ppcounty-fill')&&mapLib.getLayoutProperty('ppcounty-fill','visibility')!==v)mapLib.setLayoutProperty('ppcounty-fill','visibility',v);
-    if(mapLib.getLayer('ppcounty-line')&&mapLib.getLayoutProperty('ppcounty-line','visibility')!==v)mapLib.setLayoutProperty('ppcounty-line','visibility',v);
+    for(var i=0;i<COUNTY_LIDS.length;i++){
+      var id=COUNTY_LIDS[i];
+      try{if(mapLib.getLayer(id)&&mapLib.getLayoutProperty(id,'visibility')!==v)mapLib.setLayoutProperty(id,'visibility',v)}catch(e){}
+    }
   }catch(e){}
 }
 function setCountyMode(on,list){
@@ -1278,11 +1270,6 @@ function setCountyMode(on,list){
           return {type:'Feature',properties:{n:f.properties.n,count:st.m[f.properties.n]||0},geometry:f.geometry}})});
       }
     }catch(e){}
-    buildCountyLabels();
-    updateCountyLabels(st);
-  }
-  if(countyBuilt){
-    Object.keys(countyLabels).forEach(function(n){try{countyLabels[n].el.style.display=countyOn?'':'none'}catch(e){}});
   }
   applyCountyVis();
 }
@@ -2837,7 +2824,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v121';
+var APP_VER='v122';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
