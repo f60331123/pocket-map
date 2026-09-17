@@ -1206,47 +1206,8 @@ function renderMarkers(){
       var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
       next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true,offset:[0,3.5]}).setLngLat([p.lng,p.lat]).addTo(mapLib));
     }
-    function addCluster(g){
-      var cl=0,cn=0;g.forEach(function(it){cl+=+list[it.i].lng;cn+=+list[it.i].lat});
-      cl/=g.length;cn/=g.length;
-      var el=document.createElement('button');el.type='button';el.className='pinCluster';el.textContent=g.length;
-      el.title=g.map(function(it){return list[it.i].name||''}).join('、');
-      el.addEventListener('click',function(ev){
-        ev.stopPropagation();
-        var z=17;try{z=Math.min(mapLib.getZoom()+3,mapLib.getMaxZoom())}catch(e2){}
-        mapLib.easeTo({center:[cl,cn],zoom:z,duration:500});
-      });
-      next.push(new maplibregl.Marker({element:el,anchor:'center',subpixelPositioning:true}).setLngLat([cl,cn]).addTo(mapLib));
-    }
-    /* 用距離分群（不是切格子）：平移/縮放時分組穩定，數字不會亂跳 */
-    var cell=40,groups=[],gcell={};
-    items.forEach(function(it){
-      if(it.x==null){groups.push({cx:null,cy:null,g:[it]});return}
-      var gx=Math.floor(it.x/cell),gy=Math.floor(it.y/cell),cand=[],seen={};
-      for(var ox=-1;ox<=1;ox++)for(var oy=-1;oy<=1;oy++){
-        var bucket=gcell[(gx+ox)+','+(gy+oy)];
-        if(!bucket)continue;
-        for(var q=0;q<bucket.length;q++){var gi=bucket[q];if(seen[gi])continue;seen[gi]=1;cand.push(gi)}
-      }
-      var best=-1,bd=cell*cell;
-      for(var j=0;j<cand.length;j++){
-        var gr=groups[cand[j]];if(gr.cx==null)continue;
-        var dx=it.x-gr.cx,dy=it.y-gr.cy,d=dx*dx+dy*dy;
-        if(d<bd){bd=d;best=cand[j]}
-      }
-      var target;
-      if(best>=0){
-        target=groups[best];
-        var n=target.g.length;
-        target.cx=(target.cx*n+it.x)/(n+1);target.cy=(target.cy*n+it.y)/(n+1);
-        target.g.push(it);
-      }else{
-        target={cx:it.x,cy:it.y,g:[it]};groups.push(target);best=groups.length-1;
-      }
-      var nk=Math.floor(target.cx/cell)+','+Math.floor(target.cy/cell);
-      (gcell[nk]=gcell[nk]||[]).push(best);
-    });
-    groups.forEach(function(gr){if(gr.g.length===1)addPin(list[gr.g[0].i]);else addCluster(gr.g)});
+    list.forEach(addPin);/* v126：不再合併圖釘，每一顆都畫在自己的座標上 */
+
     pinMarkers.forEach(function(m){try{m.remove()}catch(e){}});
     pinMarkers=next;
     if(!fitted&&pts.length){fitted=true;fitToPins(pts)}
@@ -2597,7 +2558,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v125';
+var APP_VER='v126';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
