@@ -1204,7 +1204,7 @@ function renderMarkers(){
       el.setAttribute('aria-label',p.name||'圖釘');
       el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
       var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
-      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true,offset:[0,3.5]}).setLngLat([p.lng,p.lat]).addTo(mapLib));
+      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true,offset:[0,-0.5]}).setLngLat([p.lng,p.lat]).addTo(mapLib));
     }
     list.forEach(addPin);/* v126：不再合併圖釘，每一顆都畫在自己的座標上 */
 
@@ -2558,7 +2558,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v126';
+var APP_VER='v127';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
