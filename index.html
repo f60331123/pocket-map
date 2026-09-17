@@ -1028,7 +1028,7 @@ function initMainMap(){
   var cr=mapBox.querySelector('.maplibregl-ctrl-bottom-right');
   if(cr){var grp=document.createElement('div');grp.className='maplibregl-ctrl';var b=document.createElement('button');b.type='button';b.className='bmSwap';b.title='換底圖';b.setAttribute('aria-label','換底圖');b.textContent='圖資 ⟳';b.style.cssText="font-family:inherit;font-size:11.5px;font-weight:700;color:#333;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:5px 8px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)";b.addEventListener('click',function(){applyStyle((styleIdx+1)%STYLES.length,true)});grp.appendChild(b);cr.appendChild(grp)}
   mapLib.on('error',handleMapErr);
-  mapLib.on('load',function(){onStyleOk()});
+  mapLib.on('load',function(){onStyleOk();try{bindMapResize();renderMarkers()}catch(e){}});
   armLoadWatch(Date.now());
   renderMarkers();
 }
@@ -1280,6 +1280,9 @@ function setCountyMode(on,list){
 /* __CY_END__ */
 /* __MR_BEGIN__ */
 var markerBusy=false,fitPending=false;
+var pinSrcData={type:'FeatureCollection',features:[]};
+var pinLastList=[],pinIconPending={},pinIconSpec={},pinClickBound=false,mapResizeBound=false;
+var PIN_FONT='900 13px "Noto Sans TC",-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif';
 function fitToPins(pts){
   if(fitPending||!pts||!pts.length)return;
   fitPending=true;
@@ -1292,96 +1295,194 @@ function fitToPins(pts){
     }catch(e){}
   },0);
 }
+/* ---------- 圖示（canvas 現畫，掛進地圖圖層；不再是 DOM 標記） ---------- */
+function themeKeyOf(p){try{if(!isSharedMode())return '';var t=memberTheme(ownerUidOf(p));return (t&&t.key)||''}catch(e){return ''}}
+function themeRing(k){return k==='rabbit'?'#E98AB4':(k==='bear'?'#8A5A3B':'')}
+function colSlug(v){
+  var s=String(v==null?'':v).trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(s))return s.slice(1).toUpperCase();
+  if(/^#[0-9a-fA-F]{3}$/.test(s))return (s[1]+s[1]+s[2]+s[2]+s[3]+s[3]).toUpperCase();
+  return 'X'+(s.replace(/[^0-9a-zA-Z]/g,'').slice(0,6)||'0');
+}
+function pinIconId(p){return 'pp_'+themeKeyOf(p)+'_'+colSlug(stColor(p.status))+'_'+colSlug(catColor(p.cat))}
+function newCanvas(w,h){
+  var c=document.createElement('canvas');c.width=Math.round(w*2);c.height=Math.round(h*2);
+  var x=c.getContext('2d');if(!x)return null;x.scale(2,2);return {c:c,x:x};
+}
+function drawPinIcon(out,inn,ring){
+  var o=newCanvas(24,31);if(!o)return null;var x=o.x;
+  function body(y0){x.beginPath();x.moveTo(12,30);x.lineTo(7,y0);x.lineTo(17,y0);x.closePath();x.fill()}
+  x.save();x.shadowColor='rgba(0,0,0,.35)';x.shadowBlur=8;x.shadowOffsetY=3;
+  x.fillStyle=out;body(21);x.beginPath();x.arc(12,12,12,0,Math.PI*2);x.fill();x.restore();
+  x.fillStyle='#fff';x.beginPath();x.arc(12,12,12,0,Math.PI*2);x.fill();
+  x.fillStyle=out;x.beginPath();x.arc(12,12,9.5,0,Math.PI*2);x.fill();
+  x.fillStyle=out;body(21.5);
+  if(ring){x.strokeStyle=ring;x.lineWidth=3;x.beginPath();x.arc(12,12,13.5,0,Math.PI*2);x.stroke()}
+  x.fillStyle='#fff';x.beginPath();x.arc(11,11,5.5,0,Math.PI*2);x.fill();
+  x.fillStyle=inn;x.beginPath();x.arc(11,11,4,0,Math.PI*2);x.fill();
+  return o.c;
+}
+function drawClusterIcon(n){
+  var o=newCanvas(34,34);if(!o)return null;var x=o.x;
+  x.save();x.shadowColor='rgba(0,0,0,.32)';x.shadowBlur=6;x.shadowOffsetY=2;
+  x.fillStyle='#fff';x.beginPath();x.arc(17,17,17,0,Math.PI*2);x.fill();x.restore();
+  x.fillStyle='#3A3A34';x.beginPath();x.arc(17,17,15,0,Math.PI*2);x.fill();
+  x.fillStyle='#fff';x.font=PIN_FONT;x.textAlign='center';x.textBaseline='middle';
+  x.fillText(n>99?'99+':String(n),17,18);
+  return o.c;
+}
+function hasIcon(id){try{return !!(mapLib.hasImage&&mapLib.hasImage(id))}catch(e){return false}}
+function addIcon(id,cv){
+  if(!mapLib||!cv){delete pinIconPending[id];return}
+  try{
+    if(typeof createImageBitmap==='function'){
+      createImageBitmap(cv).then(function(bm){try{mapLib.addImage(id,bm,{pixelRatio:2})}catch(e){}delete pinIconPending[id]}).catch(function(){plain()});
+      return;
+    }
+  }catch(e){}
+  plain();
+  function plain(){
+    try{mapLib.addImage(id,cv,{pixelRatio:2})}catch(e){
+      try{mapLib.addImage(id,cv.getContext('2d').getImageData(0,0,cv.width,cv.height),{pixelRatio:2})}catch(e2){}
+    }
+    delete pinIconPending[id];
+  }
+}
+/* 圖示 id 內含顏色與角色，所以任何缺圖都能自己長回來（換底圖後也一樣） */
+function wantIcon(id){
+  if(!mapLib||hasIcon(id)||pinIconPending[id])return;
+  pinIconPending[id]=1;
+  var m=/^ppc(\d+)$/.exec(id);
+  if(m){addIcon(id,drawClusterIcon(parseInt(m[1],10)));return}
+  var sp=pinIconSpec[id];
+  if(sp){addIcon(id,drawPinIcon(sp[0],sp[1],sp[2]));return}
+  var q=/^pp_([^_]*)_([0-9A-F]{6})_([0-9A-F]{6})$/.exec(id);
+  if(q){addIcon(id,drawPinIcon('#'+q[2],'#'+q[3],themeRing(q[1])));return}
+  delete pinIconPending[id];
+}
+function ensurePinIcons(list){
+  for(var i=0;i<list.length;i++){
+    var p=list[i],id=pinIconId(p);
+    pinIconSpec[id]=[stColor(p.status),catColor(p.cat),themeRing(themeKeyOf(p))];
+    wantIcon(id);
+  }
+}
+function onStyleImageMissing(e){
+  var id=e&&e.id;if(!id)return;
+  if(/^ppc\d+$/.test(id)||/^pp_[^_]*_[0-9A-Za-z]{1,7}_[0-9A-Za-z]{1,7}$/.test(id))wantIcon(id);
+}
+/* 手機網址列收合、鍵盤彈出、轉向 → 地圖畫布尺寸要跟著重算 */
+function bindMapResize(){
+  if(!mapLib||mapResizeBound)return;
+  mapResizeBound=true;
+  var kick=function(){try{mapLib.resize()}catch(e){}};
+  var c=null;try{c=mapLib.getContainer&&mapLib.getContainer()}catch(e){}
+  try{
+    if(c&&typeof ResizeObserver==='function'){var ro=new ResizeObserver(function(){kick()});ro.observe(c)}
+    else if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('resize',kick);
+  }catch(e){try{if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('resize',kick)}catch(e2){}}
+  try{if(typeof window!=='undefined'&&window.visualViewport&&window.visualViewport.addEventListener)window.visualViewport.addEventListener('resize',function(){setTimeout(kick,90)})}catch(e){}
+  try{if(typeof window!=='undefined'&&window.addEventListener)window.addEventListener('orientationchange',function(){setTimeout(kick,280)})}catch(e){}
+}
+function bindPinClick(){
+  if(!mapLib||pinClickBound)return;pinClickBound=true;
+  try{mapLib.on('click','pppins-cln',function(e){
+    var f=e&&e.features&&e.features[0];if(!f)return;
+    var ll=f.geometry&&f.geometry.coordinates;if(!ll)return;
+    var cid=(f.properties||{}).cluster_id;
+    function go(z){try{mapLib.easeTo({center:ll,zoom:z,duration:420})}catch(x){}}
+    function fallback(){var z=10;try{z=Math.min(mapLib.getZoom()+3,mapLib.getMaxZoom())}catch(x){}go(z)}
+    try{
+      var r=mapLib.getClusterExpansionZoom(cid);
+      if(r&&typeof r.then==='function')r.then(function(z){go((+z||10)+0.2)}).catch(function(){fallback()});
+      else if(isFinite(+r))go(+r+0.2);
+      else fallback();
+    }catch(x){fallback()}
+  })}catch(e){}
+  try{mapLib.on('click','pppins-pin',function(e){
+    var f=e&&e.features&&e.features[0];if(!f)return;
+    var id=(f.properties||{}).id,p=null;
+    for(var i=0;i<S.pins.length;i++){if(String(S.pins[i].id)===String(id)){p=S.pins[i];break}}
+    if(!p)return;
+    if(currentPopup&&currentPopup._pinId===p.id){closePopup();return}
+    openPopupFor(p);
+  })}catch(e){}
+  ['pppins-pin','pppins-cln'].forEach(function(id){
+    try{mapLib.on('mousemove',id,function(){try{mapLib.getCanvas().style.cursor='pointer'}catch(x){}})}catch(e){}
+    try{mapLib.on('mouseleave',id,function(){try{mapLib.getCanvas().style.cursor=''}catch(x){}})}catch(e){}
+  });
+}
+function ensurePinLayers(){
+  if(!mapLib)return;
+  try{
+    if(mapLib.isStyleLoaded&&!mapLib.isStyleLoaded())return;
+    var fresh=false;
+    if(!mapLib.getSource('pppins')){mapLib.addSource('pppins',{type:'geojson',data:pinSrcData,cluster:true,clusterRadius:46,clusterMaxZoom:15});fresh=true}
+    if(!mapLib.getLayer('pppins-cln'))mapLib.addLayer({id:'pppins-cln',type:'symbol',source:'pppins',filter:['has','point_count'],layout:{
+      'icon-image':['concat','ppc',['to-string',['get','point_count']]],
+      'icon-allow-overlap':true,'icon-size':1,'symbol-sort-key':['get','point_count']}});
+    if(!mapLib.getLayer('pppins-pin'))mapLib.addLayer({id:'pppins-pin',type:'symbol',source:'pppins',filter:['!',['has','point_count']],layout:{
+      'icon-image':['get','ic'],'icon-anchor':'bottom','icon-allow-overlap':true,'icon-size':1,'symbol-sort-key':['get','rk']}});
+    if(fresh){
+      pinIconPending={};pinIconSpec={};
+      try{var s=mapLib.getSource('pppins');if(s&&s.setData)s.setData(pinSrcData)}catch(e){}
+      ensurePinIcons(pinLastList);
+    }
+    var v=countyOn?'none':'visible';
+    ['pppins-cln','pppins-pin'].forEach(function(id){
+      try{if(mapLib.getLayer(id)&&mapLib.getLayoutProperty(id,'visibility')!==v)mapLib.setLayoutProperty(id,'visibility',v)}catch(e){}
+    });
+    bindPinClick();
+  }catch(e){}
+}
+function updatePinSource(list,cmode){
+  pinLastList=list;
+  pinSrcData={type:'FeatureCollection',features:list.map(function(p){
+    return {type:'Feature',geometry:{type:'Point',coordinates:[+p.lng,+p.lat]},
+      properties:{id:p.id,ic:pinIconId(p),rk:(+p.created||0)}};
+  })};
+  try{var s=mapLib.getSource('pppins');if(s&&s.setData)s.setData(pinSrcData)}catch(e){}
+  var v=cmode?'none':'visible';
+  ['pppins-cln','pppins-pin'].forEach(function(id){
+    try{if(mapLib.getLayer(id)&&mapLib.getLayoutProperty(id,'visibility')!==v)mapLib.setLayoutProperty(id,'visibility',v)}catch(e){}
+  });
+}
+function onStyleMaybe(){
+  try{ensureCountyLayers();applyCountyVis()}catch(e){}
+  try{ensurePinLayers()}catch(e){}
+}
 function bindPinHook(){
   if(!mapLib||mapLib.__pinHook)return;
   mapLib.__pinHook=true;
-  mapLib.on('moveend',function(){try{renderMarkers()}catch(e){}});
-  try{mapLib.on('styledata',function(){try{ensureCountyLayers();applyCountyVis()}catch(e){}})}catch(e){}
+  /* 只有「縣市分塊 ↔ 個別圖釘」切換時才需要重算；平移縮放交給圖層自己跟 */
+  mapLib.on('moveend',function(){
+    try{
+      var z=mapLib.getZoom();
+      if(countyLock&&z<=8)countyLock=false;
+      var cm=(z<Z_SPLIT)&&!countyLock;
+      if(cm!==countyOn)renderMarkers();
+    }catch(e){}
+  });
+  try{mapLib.on('styledata',function(){try{onStyleMaybe()}catch(e){}})}catch(e){}
+  try{mapLib.on('styleimagemissing',function(e){try{onStyleImageMissing(e)}catch(x){}})}catch(e){}
   try{ensureCountyLayers()}catch(e){}
+  try{ensurePinLayers()}catch(e){}
 }
 function renderMarkers(){
   if(!mapLib||markerBusy)return;
   markerBusy=true;
-  var next=[];
   try{
     var list=filtered().filter(function(p){return p.lat!=null&&p.lng!=null});
-    var pts=list.map(function(p){return [p.lng,p.lat]});
     var z=11;try{z=mapLib.getZoom()}catch(e){}
     if(countyLock&&z<=8)countyLock=false;
     var cmode=(z<Z_SPLIT)&&!countyLock;
     setCountyMode(cmode,list);
-    if(cmode){
-      /* 縣市分塊模式：先看縣市，點區塊再放大看圖釘 */
-      pinMarkers.forEach(function(m){try{m.remove()}catch(e){}});
-      pinMarkers=[];
-      if(!fitted&&pts.length){fitted=true;fitToPins(pts)}
-      markerBusy=false;
-      bindPinHook();
-      return;
-    }
-    var items=list.map(function(p,i){
-      var px=null;try{px=mapLib.project([p.lng,p.lat])}catch(e){}
-      if(!px||!isFinite(px.x)||!isFinite(px.y))return {i:i,x:null,y:null};
-      return {i:i,x:px.x,y:px.y};
-    });
-    function addPin(p){
-      var el=document.createElement('button');el.type='button';
-      var theme=isSharedMode()?memberTheme(ownerUidOf(p)):null;
-      el.className='pin'+(theme?(' '+theme.key):'');
-      el.style.setProperty('--c',stColor(p.status));
-      el.style.setProperty('--cc',catColor(p.cat));
-      el.title=p.name||'';
-      el.setAttribute('aria-label',p.name||'圖釘');
-      el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
-      var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
-      next.push(new maplibregl.Marker({element:wrap,anchor:'bottom'}).setLngLat([p.lng,p.lat]).addTo(mapLib));
-    }
-    function addCluster(g){
-      var cl=0,cn=0;g.forEach(function(it){cl+=+list[it.i].lng;cn+=+list[it.i].lat});
-      cl/=g.length;cn/=g.length;
-      var el=document.createElement('button');el.type='button';el.className='pinCluster';el.textContent=g.length;
-      el.title=g.map(function(it){return list[it.i].name||''}).join('、');
-      el.addEventListener('click',function(ev){
-        ev.stopPropagation();
-        var z=17;try{z=Math.min(mapLib.getZoom()+3,mapLib.getMaxZoom())}catch(e2){}
-        mapLib.easeTo({center:[cl,cn],zoom:z,duration:500});
-      });
-      next.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([cl,cn]).addTo(mapLib));
-    }
-    /* 用距離分群（不是切格子）：平移/縮放時分組穩定，數字不會亂跳 */
-    var cell=40,groups=[],gcell={};
-    items.forEach(function(it){
-      if(it.x==null){groups.push({cx:null,cy:null,g:[it]});return}
-      var gx=Math.floor(it.x/cell),gy=Math.floor(it.y/cell),cand=[],seen={};
-      for(var ox=-1;ox<=1;ox++)for(var oy=-1;oy<=1;oy++){
-        var bucket=gcell[(gx+ox)+','+(gy+oy)];
-        if(!bucket)continue;
-        for(var q=0;q<bucket.length;q++){var gi=bucket[q];if(seen[gi])continue;seen[gi]=1;cand.push(gi)}
-      }
-      var best=-1,bd=cell*cell;
-      for(var j=0;j<cand.length;j++){
-        var gr=groups[cand[j]];if(gr.cx==null)continue;
-        var dx=it.x-gr.cx,dy=it.y-gr.cy,d=dx*dx+dy*dy;
-        if(d<bd){bd=d;best=cand[j]}
-      }
-      var target;
-      if(best>=0){
-        target=groups[best];
-        var n=target.g.length;
-        target.cx=(target.cx*n+it.x)/(n+1);target.cy=(target.cy*n+it.y)/(n+1);
-        target.g.push(it);
-      }else{
-        target={cx:it.x,cy:it.y,g:[it]};groups.push(target);best=groups.length-1;
-      }
-      var nk=Math.floor(target.cx/cell)+','+Math.floor(target.cy/cell);
-      (gcell[nk]=gcell[nk]||[]).push(best);
-    });
-    groups.forEach(function(gr){if(gr.g.length===1)addPin(list[gr.g[0].i]);else addCluster(gr.g)});
-    pinMarkers.forEach(function(m){try{m.remove()}catch(e){}});
-    pinMarkers=next;
-    if(!fitted&&pts.length){fitted=true;fitToPins(pts)}
+    ensurePinLayers();
+    ensurePinIcons(list);
+    updatePinSource(list,cmode);
+    if(!fitted&&list.length){fitted=true;fitToPins(list.map(function(p){return [p.lng,p.lat]}))}
   }catch(e){
-    try{if(window.console&&console.warn)console.warn('renderMarkers 略過一次錯誤：',e)}catch(e2){}
+    try{if(window.console&&window.console.warn)window.console.warn('renderMarkers 略過一次錯誤：',e)}catch(e2){}
   }
   markerBusy=false;
   bindPinHook();
@@ -2727,7 +2828,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v118';
+var APP_VER='v120';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
