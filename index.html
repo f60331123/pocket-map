@@ -547,7 +547,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
     <input type="file" id="importFile" accept=".json,application/json" class="hide">
 
-    <button type="button" class="miniBtn" id="ocrShotBtn" style="width:100%;margin:2px 0 14px">📷 從截圖讀文字（只幫你分析，不會自動填）</button>
+    <button type="button" class="miniBtn" id="ocrShotBtn" style="width:100%;margin:2px 0 14px">📷 從截圖讀文字（自動填店名、地址）</button>
 
     <label class="lb" for="fName">店名 / 地點名稱</label>
       <span class="fieldWrap"><input class="txt" id="fName" type="text" placeholder="例如：OO 燒肉"><button type="button" class="clrBtn" data-clr="fName" aria-label="清空店名">×</button></span>
@@ -656,14 +656,14 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 </div>
 
 <div class="overlay hide" id="ocrShotOverlay">
-  <div class="sheet" role="dialog" aria-modal="true" aria-label="從截圖讀文字">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="從截圖讀文字" style="max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:16px">
     <div class="sheetHead">
       <h2>從截圖讀文字</h2>
       <button class="xBtn" id="ocrShotClose" aria-label="關閉">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <div id="ocrShotBody"></div>
+    <div id="ocrShotBody" style="flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px"></div>
   </div>
 </div>
 
@@ -1578,11 +1578,12 @@ function ocrRawLines(t){
 }
 function ocrJunkLine(l){
   if(!l)return true;
+  if(/個讚|則留言|追蹤|傳送訊息|已追蹤|粉絲/.test(l))return true;
   if(OCR_JUNK.test(l))return true;
   if(OCR_DATE.test(l))return true;
   var c=(l.match(/[\u4e00-\u9fff]/g)||[]).length,d=(l.match(/\d/g)||[]).length;
   var isAddr=/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l);
-  var isTel=/09\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/0[2-8][ \-]?\d{3,4}[ \-]?\d{3,4}/.test(l);
+  var isTel=/09[ \-.]?\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/0[2-8][ \-]?\d{3,4}[ \-]?\d{3,4}/.test(l);
   var isVal=/\d+\s*(元|塊)|\$+\s*\d+|\d{1,2}:\d{2}/.test(l);
   if(c===0)return !(isTel||isAddr||isVal);
   var runs=l.split(/\s+/).filter(Boolean),nospace=l.replace(/\s/g,''),avg=runs.length?nospace.length/runs.length:9;
@@ -1682,7 +1683,7 @@ function ocrFieldGuess(lines){
   lines=(lines||[]).map(function(x){return ocrFixApplyLine(String(x||'').trim())}).filter(Boolean);
   var joined=lines.join('\n'),phone='',addr='',metro='',name='';
   lines.forEach(function(l){
-    if(!phone){var m=l.replace(/[OＯo]/g,'0').match(/(?:\+886[-\s]?)?0?9\d{2}[-\s]?\d{3}[-\s]?\d{3}|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{3,4}/); if(m)phone=m[0].replace(/\s+/g,'').replace(/(\d{2,4})[- ]?(\d{3,4})[- ]?(\d{3,4})/,'$1-$2-$3').replace(/^886-/,'0')}
+    if(!phone){var m=l.replace(/[OＯo]/g,'0').match(/(?:\+886[-\s]?)?0?9[-\s]?\d{2}[-\s]?\d{3}[-\s]?\d{3}|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{3,4}/); if(m)phone=m[0].replace(/\s+/g,'').replace(/(\d{2,4})[- ]?(\d{3,4})[- ]?(\d{3,4})/,'$1-$2-$3').replace(/^886-/,'0')}
     if(!addr&&/(市|縣).{0,12}(區|鄉|鎮|市).{0,20}(路|街|道|巷|弄|段).{0,12}(號|樓|F|f)?/.test(l))addr=l.replace(/^(地址|位址)[:：]?/,'');
     if(!addr&&/(路|街|道|巷|弄|段).{0,8}\d{1,4}(之\d+)?號/.test(l))addr=l.replace(/^(地址|位址)[:：]?/,'');
     if(!metro&&/捷運.{0,10}站/.test(l))metro=(l.match(/捷運.{0,10}站/)||[''])[0];
@@ -1770,7 +1771,11 @@ function ocrShotCopy(txt,btn){
 function ocrShotUse(u){ocrShotImg=u;ocrShotCrop()}
 function ocrShotCrop(){
   if(!ocrShotImg){toast('先選一張截圖');return}
+  var old=document.getElementById('chipEditOverlay');
+  if(old&&old.parentNode)old.parentNode.removeChild(old);
   openOcrCrop(ocrShotImg,function(sel){ocrShotRun(sel)},function(){});
+  var oi=document.getElementById('ocImg');
+  if(oi)oi.addEventListener('error',function(){toast('這張圖讀不進來（iPhone 原況照片／HEIC 常見）。請改用截圖 PNG 或 JPG。')});
 }
 function ocrShotPaste(){
   var body=$('#ocrShotBody');if(!body)return;
@@ -1815,7 +1820,7 @@ function ocrShotRun(src){
             var p2=ocrCleanLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
             p1.lines.forEach(function(l){seen[l.replace(/\s/g,'').toLowerCase()]=1});
             p2.lines.forEach(function(l){var k=l.replace(/\s/g,'').toLowerCase();if(seen[k])return;
-              var val=(/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l))||/09\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/^店名：/.test(l);
+              var val=(/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l))||/09[ \-.]?\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/^店名：/.test(l);
               if(!val)return;seen[k]=1;merged.push(l);extra++});
             finish(merged,raw1+'\n=====白字強化=====\n'+((r2.data&&r2.data.text)||''),p1.dropped+p2.dropped,extra);
           }).catch(function(){finish(p1.lines,raw1,p1.dropped,0)});
@@ -1832,16 +1837,29 @@ function ocrShotRun(src){
     document.head.appendChild(js);
   }
 }
+function ocrShotFill(kind,val,force){
+  if(!val)return false;
+  var el=(kind==='name')?$('#fName'):((kind==='addr')?$('#fAddr'):null);
+  if(!el)return false;
+  if(!force&&el.value&&el.value.trim())return false;
+  el.value=val;
+  try{el.dispatchEvent(new Event('input',{bubbles:true}))}catch(e){}
+  try{el.dispatchEvent(new Event('change',{bubbles:true}))}catch(e){}
+  return true;
+}
 function ocrShotRender(stage,payload){
-  var body=$('#ocrShotBody');if(!body)return;
+  var body=$('#ocrShotBody');if(!body)return;body.scrollTop=0;
   if(stage==='pick'){
-    body.innerHTML='<div style="font-size:13.5px;line-height:1.8;color:var(--ink2);text-align:left">選一張截圖，App 會把裡面的文字讀出來、整理成清單。<b>只做分析，不會自動填進店名或地址</b>。</div>'
-      +'<div class="ceBtns" style="margin-top:12px"><button type="button" class="primary" id="ocrPickFile" style="flex:1">選截圖</button><button type="button" id="ocrPickPaste" style="flex:1">貼上圖片</button></div>'
-      +'<div id="ocrPasteHint" style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">電腦可以直接按 Ctrl+V 貼上剪貼簿裡的圖。</div>'
+    body.innerHTML='<div class="ceBtns" style="margin-top:0"><button type="button" class="primary" id="ocrPickFile" style="flex:1;padding:15px 0;font-size:15.5px">選截圖／拍照</button><button type="button" id="ocrPickPaste" style="flex:1;padding:15px 0;font-size:15.5px">貼上圖片</button></div>'
+      +'<div id="ocrPasteHint" style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">選好後可在圖上<b>按住拖曳框出</b>要讀的那一塊（框小一點比較準），不想框就直接讀整張。電腦可先複製圖片再按 Ctrl+V。iPhone 原況照片（HEIC）可能讀不進來，請用截圖。</div>'
+      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">讀完會<b>自動填進店名與地址欄位</b>（欄位已經有字的會保留，不會被蓋掉）。</div>'
       +'<textarea id="ocrPasteBox" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></textarea>';
     body.querySelector('#ocrPickFile').addEventListener('click',function(){
       var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
-      inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){ocrShotUse(String(rd.result||''))};rd.readAsDataURL(f)};
+      inp.style.position='fixed';inp.style.left='-9999px';inp.style.width='1px';inp.style.height='1px';
+      document.body.appendChild(inp);
+      inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){if(inp.parentNode)inp.parentNode.removeChild(inp);return}
+        var rd=new FileReader();rd.onload=function(){if(inp.parentNode)inp.parentNode.removeChild(inp);ocrShotUse(String(rd.result||''))};rd.readAsDataURL(f)};
       inp.click();
     });
     body.querySelector('#ocrPickPaste').addEventListener('click',ocrShotPaste);
@@ -1856,11 +1874,18 @@ function ocrShotRender(stage,payload){
   var r=payload||{},lines=r.lines||[];
   var fields=[['店名',r.name],['地址',r.addr],['電話',r.phone],['捷運站',r.metro]].filter(function(x){return x[1]});
   ocrShotLast={fields:fields,lines:lines,raw:r.raw||''};
-  var h='<div style="font-size:13px;color:var(--ink2);text-align:left;line-height:1.7">讀到 <b>'+lines.length+'</b> 行文字'+(r.dropped?('（已濾掉 '+r.dropped+' 行雜訊）'):'')+'。想用哪一行，按右邊的「複製」自己貼進欄位。</div>';
+  var fN=ocrShotFill('name',r.name,false),fA=ocrShotFill('addr',r.addr,false);
+  var autoMsg='';
+  if(fN||fA){autoMsg='<div style="font-size:12.5px;color:#2E7D32;text-align:left;line-height:1.6;margin-bottom:6px">✅ 已自動填進欄位：'+((fN?'店名':'')+(fN&&fA?'、':'')+(fA?'地址':''))+'（可以自己改；欄位原本就有字的沒被覆蓋）</div>';}
+  else if(r.name||r.addr){autoMsg='<div style="font-size:12.5px;color:#B26A00;text-align:left;line-height:1.6;margin-bottom:6px">欄位裡已經有字，沒有覆蓋。要換成讀到的內容，按右邊的「填入」。</div>';}
+  var h=autoMsg+'<div style="font-size:13px;color:var(--ink2);text-align:left;line-height:1.7">讀到 <b>'+lines.length+'</b> 行文字'+(r.dropped?('（已濾掉 '+r.dropped+' 行雜訊）'):'')+'。要哪一行按「複製」，或按「填入」直接進欄位。</div>';
   if(fields.length){
     h+='<label class="lb" style="margin-top:10px">認出來的欄位</label>';
     fields.forEach(function(f){
-      h+='<div style="display:flex;gap:6px;align-items:center;margin:5px 0"><span style="flex:0 0 50px;font-size:12px;color:var(--ink2);text-align:left">'+f[0]+'</span><span style="flex:1;min-width:0;font-size:14.5px;text-align:left;word-break:break-all">'+esc(f[1])+'</span><button type="button" class="miniBtn" data-cp="'+escAttr(f[1])+'" style="padding:6px 9px">複製</button></div>';
+      var kind={'店名':'name','地址':'addr'}[f[0]];
+      h+='<div style="display:flex;gap:6px;align-items:center;margin:5px 0"><span style="flex:0 0 50px;font-size:12px;color:var(--ink2);text-align:left">'+f[0]+'</span><span style="flex:1;min-width:0;font-size:14.5px;text-align:left;word-break:break-all">'+esc(f[1])+'</span>'
+        +(kind?('<button type="button" class="miniBtn" data-fill="'+kind+'" data-val="'+escAttr(f[1])+'" style="padding:6px 9px">填入</button>'):'')
+        +'<button type="button" class="miniBtn" data-cp="'+escAttr(f[1])+'" style="padding:6px 9px">複製</button></div>';
     });
   }else{
     h+='<div style="font-size:12.5px;color:#8A8674;text-align:left;margin-top:8px">沒有認出明確的店名或地址 — 看看下面的文字清單。</div>';
@@ -1875,6 +1900,10 @@ function ocrShotRender(stage,payload){
   h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
   body.innerHTML=h;
   Array.prototype.forEach.call(body.querySelectorAll('[data-cp]'),function(b){b.addEventListener('click',function(){ocrShotCopy(b.getAttribute('data-cp'),b)})});
+  Array.prototype.forEach.call(body.querySelectorAll('[data-fill]'),function(b){b.addEventListener('click',function(){
+    var k=b.getAttribute('data-fill'),v=b.getAttribute('data-val');
+    if(ocrShotFill(k,v,true)){var o=b.textContent;b.textContent='已填入';setTimeout(function(){b.textContent=o},1200)}else toast('找不到欄位');
+  })});
   var ca=body.querySelector('#ocrShotCopyAll');
   if(ca)ca.addEventListener('click',function(){
     var all=[];fields.forEach(function(f){all.push(f[0]+'：'+f[1])});if(all.length)all.push('');
@@ -2676,7 +2705,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v132';
+var APP_VER='v133';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
