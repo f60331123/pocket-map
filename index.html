@@ -547,6 +547,8 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
     <input type="file" id="importFile" accept=".json,application/json" class="hide">
 
+    <button type="button" class="miniBtn" id="ocrShotBtn" style="width:100%;margin:2px 0 14px">📷 從截圖讀文字（只幫你分析，不會自動填）</button>
+
     <label class="lb" for="fName">店名 / 地點名稱</label>
       <span class="fieldWrap"><input class="txt" id="fName" type="text" placeholder="例如：OO 燒肉"><button type="button" class="clrBtn" data-clr="fName" aria-label="清空店名">×</button></span>
 
@@ -653,6 +655,18 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
   </div>
 </div>
 
+<div class="overlay hide" id="ocrShotOverlay">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="從截圖讀文字">
+    <div class="sheetHead">
+      <h2>從截圖讀文字</h2>
+      <button class="xBtn" id="ocrShotClose" aria-label="關閉">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="ocrShotBody"></div>
+  </div>
+</div>
+
 <div id="toast" role="status"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -693,6 +707,23 @@ function lastEmailSet(v){try{if(v)localStorage.setItem(KEY+'_lastEmail',v)}catch
 function localScopeKey(){return KEY+((AUTH&&AUTH.user&&AUTH.user.uid)?('_u_'+AUTH.user.uid):'_guest')}
 function scopedGet(suf,def){try{var v=localStorage.getItem(localScopeKey()+suf);return v==null?(def||''):v}catch(e){return def||''}}
 function scopedSet(suf,v){try{localStorage.setItem(localScopeKey()+suf,v)}catch(e){}}
+function scopeKeyForUid(uid){return KEY+(uid?('_u_'+uid):'_guest')}
+function myUid(){return (AUTH&&AUTH.user&&AUTH.user.uid)||''}
+/* v130：不是這個帳號的圖釘（例如從共用地圖被寫進本機的）先搬到備份，不刪除 */
+function quarantineForeignPins(){
+  if(S.sharedRoom)return 0;
+  var me=myUid(),bad=(S.pins||[]).filter(function(p){return p&&p.ownerUid&&p.ownerUid!==me});
+  if(!bad.length)return 0;
+  try{
+    var bk=[];try{bk=JSON.parse(localStorage.getItem(KEY+'_foreignBackup')||'[]')}catch(e2){bk=[]}
+    localStorage.setItem(KEY+'_foreignBackup',JSON.stringify(bk.concat(bad)));
+  }catch(e3){}
+  var ids={};bad.forEach(function(p){ids[p.id]=1});
+  S.pins=(S.pins||[]).filter(function(p){return !ids[p.id]});
+  try{localStorage.setItem(localScopeKey(),JSON.stringify(stateData()))}catch(e4){}
+  setTimeout(function(){toast('已把 '+bad.length+' 顆不屬於這個帳號的圖釘移到備份（沒有刪除）')},1600);
+  return bad.length;
+}
 
 function catAll(includeHidden){
   var arr=BASE_CATS.filter(function(c){return includeHidden||S.hiddenCats.indexOf(c.id)<0}).map(function(c){
@@ -719,7 +750,7 @@ function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+c
 function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if('avatarColor' in d)S.avatarColor=d.avatarColor||'';if('avatarImage' in d)S.avatarImage=d.avatarImage||'';S.ocrFixes=d.ocrFixes||{};S.ocrCases=Array.isArray(d.ocrCases)?d.ocrCases:[];if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
 function resetLocalState(){S.pins=[];S.customCats=[];S.catColors={};S.catNames={};S.hiddenCats=[];S.statusColors={done:'#1F7A6B',todo:'#E9A319'};S.pinColorMode='cat';S.pinShape={done:'solid',todo:'hollow'};S.catOrder=[];S.trash={};S.avatarColor='';S.avatarImage='';S.folders=[];S.shareView=false;S.sharedRoom='';S.ocrFixes={};S.ocrCases=[]}
 function byId(id){return document.getElementById(id)}
-function load(){resetLocalState();try{applyState(JSON.parse(localStorage.getItem(localScopeKey())||'{}'))}catch(e){}if(!S.trash)S.trash={};S.sharedRoom=scopedGet('_ws','');S.shareView=scopedGet('_sv','0')==='1'}
+function load(){resetLocalState();try{applyState(JSON.parse(localStorage.getItem(localScopeKey())||'{}'))}catch(e){}if(!S.trash)S.trash={};S.sharedRoom=scopedGet('_ws','');S.shareView=scopedGet('_sv','0')==='1';if(!myUid()){S.sharedRoom='';S.shareView=false}quarantineForeignPins()}
 function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{},avatarColor:S.avatarColor||'',avatarImage:S.avatarImage||'',ocrFixes:S.ocrFixes||{},ocrCases:S.ocrCases||[]}}
 function currentRoom(){return S.sharedRoom?wsRoomObj(S.sharedRoom):null}
 function isSharedMode(){return !!S.sharedRoom}
@@ -1723,58 +1754,145 @@ function openOcrCrop(dataUrl,onOk,onCancel){
     im.src=dataUrl;
   });
 }
-function ocrRun(src,oh){
-  ocrBusy=true;var lastPrep=null;
-    oh('準備中文辨識引擎…（第一次要下載約 2MB 模型，之後就快了）');
-    function ocrPrep(dataUrl){return new Promise(function(res){var im=new Image();im.onload=function(){try{var cv=document.createElement('canvas'),sc=Math.min(2.2,2600/Math.max(1,im.width));cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(im,0,0,cv.width,cv.height);var u=cv.toDataURL('image/png');lastPrep=u;res(u)}catch(e){res(dataUrl)}};im.onerror=function(){res(dataUrl)};im.src=dataUrl})}
-    function recog(srcd){return ocrPrep(srcd).then(function(prep){return Tesseract.recognize(prep||srcd,'chi_tra',{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
-    function finish(lines,rawTxt,dropped,boost){
-      ocrBusy=false;
-      ocrOut={clean:lines.join('\n'),raw:rawTxt,lastLbl:''};
-      var rb=$('#ocrRawBtn');rb.classList.remove('hide');
-      if(!lines.length){rb.textContent='看原始辨識文字';oh('沒有辨識出有用的文字 — 換張更清楚的截圖（字大一點、別疊在花背景上），或直接打字再按「智慧解析」'+(dropped?('（已濾掉 '+dropped+' 行雜訊）'):''));return}
-      var ta=$('#fText');ta.value=ta.value.trim()?(ta.value+'\n'+lines.join('\n')):lines.join('\n');
-      var fg=ocrFieldGuess(lines);
-      if(fg.name&&!$('#fName').value.trim())$('#fName').value=fg.name;
-      if(fg.addr&&!$('#fAddr').value.trim())$('#fAddr').value=fg.addr;
-      var extraInfo=[fg.phone,fg.metro].filter(Boolean).join('\n');
-      if(extraInfo){var curIntro=$('#fIntro').value.trim();if(!curIntro||curIntro.indexOf(extraInfo)<0)$('#fIntro').value=curIntro?(curIntro+'\n'+extraInfo):extraInfo}
-      rb.textContent=dropped?('已濾掉 '+dropped+' 行雜訊・看原始文字'):'看原始文字';
-      oh('✓ 取到 '+lines.length+' 行有用文字'+(boost?('，白字強化多抓到 '+boost+' 行'):'')+'，正在自動解析…');
-      setTimeout(function(){var pb=document.querySelector('#textParseBtn');if(pb)pb.click()},400);
-      try{ta.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}
-    }
-    var run=function(){
-      try{
-        recog(src).then(function(r){
-          var raw1=(r.data&&r.data.text)||'',p1=ocrCleanLines(raw1);
-          var isAddrL=function(l){return /\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l)};
-          if(p1.lines.some(isAddrL)||p1.raw.join('').length>=200)return finish(p1.lines,raw1,p1.dropped,false);
-          oh('畫面像白字疊照片 — 白字強化辨識中…（多花幾秒）');
-          ocrInvert(lastPrep||src,function(prepUrl){
-            if(!prepUrl)return finish(p1.lines,raw1,p1.dropped,false);
-            recog(prepUrl).then(function(r2){
-              var p2=ocrCleanLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
-              p1.lines.forEach(function(l){seen[l.replace(/\s/g,'').toLowerCase()]=1});
-              p2.lines.forEach(function(l){var k=l.replace(/\s/g,'').toLowerCase();if(seen[k])return;
-                var val=(/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l))||/09\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/^店名：/.test(l);
-                if(!val)return;seen[k]=1;merged.push(l);extra++});
-              finish(merged,raw1+'\n=====白字強化=====\n'+((r2.data&&r2.data.text)||''),p1.dropped+p2.dropped,extra);
-            }).catch(function(){finish(p1.lines,raw1,p1.dropped,false)});
-          });
-        }).catch(function(e){ocrBusy=false;oh('辨識失敗：'+((e&&e.message)||'未知錯誤'))});
-      }catch(e){ocrBusy=false;oh('辨識引擎載入失敗，請檢查網路')}
-    };
-    if(window.Tesseract)run();
-    else{
-      var js=document.createElement('script');
-      js.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-      js.onload=run;
-      js.onerror=function(){ocrBusy=false;oh('連不上辨識服務（這個網路有封鎖？）稍後再試')};
-      document.head.appendChild(js);
-    }
+/* ---------- v132：從截圖讀文字（只分析，不自動填欄位） ---------- */
+var ocrShotImg='',ocrShotLast={fields:[],lines:[],raw:''};
+function ocrShotOpen(){var ov=$('#ocrShotOverlay');if(!ov)return;ocrShotImg='';ov.classList.remove('hide');ocrShotRender('pick')}
+function ocrShotClose(){var ov=$('#ocrShotOverlay');if(ov)ov.classList.add('hide')}
+function ocrShotCopyFB(txt,done){
+  try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();done&&done()}
+  catch(e){toast('複製失敗，請手動選取')}
 }
-
+function ocrShotCopy(txt,btn){
+  var done=function(){if(!btn)return;var o=btn.textContent;btn.textContent='已複製';setTimeout(function(){btn.textContent=o},1200)};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done,function(){ocrShotCopyFB(txt,done)});
+  else ocrShotCopyFB(txt,done);
+}
+function ocrShotUse(u){ocrShotImg=u;ocrShotCrop()}
+function ocrShotCrop(){
+  if(!ocrShotImg){toast('先選一張截圖');return}
+  openOcrCrop(ocrShotImg,function(sel){ocrShotRun(sel)},function(){});
+}
+function ocrShotPaste(){
+  var body=$('#ocrShotBody');if(!body)return;
+  var hint=body.querySelector('#ocrPasteHint');
+  if(hint)hint.innerHTML='已準備好 — 現在按 <b>Ctrl+V</b>（手機長按下面的框選「貼上」）。';
+  var ta=body.querySelector('#ocrPasteBox');
+  if(ta){try{ta.focus()}catch(e){}}
+}
+function ocrShotPasteListener(e){
+  var ov=$('#ocrShotOverlay');if(!ov||ov.classList.contains('hide'))return;
+  var dt=e.clipboardData;if(!dt)return;
+  var items=dt.items||[],f=null,i;
+  for(i=0;i<items.length;i++){if(items[i].type&&items[i].type.indexOf('image')===0){f=items[i].getAsFile();break}}
+  if(!f&&dt.files&&dt.files[0])f=dt.files[0];
+  if(!f)return;
+  e.preventDefault();
+  var rd=new FileReader();
+  rd.onload=function(){ocrShotUse(String(rd.result||''))};
+  rd.readAsDataURL(f);
+}
+function ocrShotRun(src){
+  var oh=function(msg){ocrShotRender('busy',msg)};
+  oh('準備中文辨識引擎…（第一次要下載約 2MB 模型，之後就快了）');
+  var lastPrep=null;
+  function prep(dataUrl){return new Promise(function(res){var im=new Image();im.onload=function(){try{var cv=document.createElement('canvas'),sc=Math.min(2.2,2600/Math.max(1,im.width));cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(im,0,0,cv.width,cv.height);res(cv.toDataURL('image/png'))}catch(e){res(dataUrl)}};im.onerror=function(){res(dataUrl)};im.src=dataUrl})}
+  function recog(d){return prep(d).then(function(p){lastPrep=p;return Tesseract.recognize(p,'chi_tra',{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
+  function finish(lines,raw,dropped,extra){
+    var fg={};try{fg=ocrFieldGuess(lines)||{}}catch(e){fg={}}
+    ocrOut={clean:lines.join('\n'),raw:raw,lastLbl:''};
+    ocrShotRender('done',{lines:lines,dropped:dropped,raw:raw,name:fg.name||'',addr:fg.addr||'',phone:fg.phone||'',metro:fg.metro||'',extra:extra||0});
+  }
+  var run=function(){
+    try{
+      recog(src).then(function(r){
+        var raw1=(r.data&&r.data.text)||'',p1=ocrCleanLines(raw1);
+        var isAddrL=function(l){return /\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l)};
+        if(p1.lines.some(isAddrL)||p1.raw.join('').length>=200)return finish(p1.lines,raw1,p1.dropped,0);
+        oh('畫面像白字疊照片 — 白字強化辨識中…（多花幾秒）');
+        ocrInvert(lastPrep||src,function(prepUrl){
+          if(!prepUrl)return finish(p1.lines,raw1,p1.dropped,0);
+          recog(prepUrl).then(function(r2){
+            var p2=ocrCleanLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
+            p1.lines.forEach(function(l){seen[l.replace(/\s/g,'').toLowerCase()]=1});
+            p2.lines.forEach(function(l){var k=l.replace(/\s/g,'').toLowerCase();if(seen[k])return;
+              var val=(/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l))||/09\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/^店名：/.test(l);
+              if(!val)return;seen[k]=1;merged.push(l);extra++});
+            finish(merged,raw1+'\n=====白字強化=====\n'+((r2.data&&r2.data.text)||''),p1.dropped+p2.dropped,extra);
+          }).catch(function(){finish(p1.lines,raw1,p1.dropped,0)});
+        });
+      }).catch(function(e){oh('辨識失敗：'+((e&&e.message)||'未知錯誤'))});
+    }catch(e){oh('辨識引擎載入失敗，請檢查網路')}
+  };
+  if(window.Tesseract)run();
+  else{
+    var js=document.createElement('script');
+    js.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    js.onload=run;
+    js.onerror=function(){oh('連不上辨識服務（這個網路有封鎖？）稍後再試')};
+    document.head.appendChild(js);
+  }
+}
+function ocrShotRender(stage,payload){
+  var body=$('#ocrShotBody');if(!body)return;
+  if(stage==='pick'){
+    body.innerHTML='<div style="font-size:13.5px;line-height:1.8;color:var(--ink2);text-align:left">選一張截圖，App 會把裡面的文字讀出來、整理成清單。<b>只做分析，不會自動填進店名或地址</b>。</div>'
+      +'<div class="ceBtns" style="margin-top:12px"><button type="button" class="primary" id="ocrPickFile" style="flex:1">選截圖</button><button type="button" id="ocrPickPaste" style="flex:1">貼上圖片</button></div>'
+      +'<div id="ocrPasteHint" style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">電腦可以直接按 Ctrl+V 貼上剪貼簿裡的圖。</div>'
+      +'<textarea id="ocrPasteBox" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></textarea>';
+    body.querySelector('#ocrPickFile').addEventListener('click',function(){
+      var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+      inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();rd.onload=function(){ocrShotUse(String(rd.result||''))};rd.readAsDataURL(f)};
+      inp.click();
+    });
+    body.querySelector('#ocrPickPaste').addEventListener('click',ocrShotPaste);
+    return;
+  }
+  if(stage==='busy'){
+    body.innerHTML='<div id="ocrShotMsg" style="font-size:13.5px;line-height:1.8;text-align:left">'+esc(payload||'處理中…')+'</div>'
+      +'<div style="margin-top:12px;height:8px;background:#EFEDE6;border-radius:99px;overflow:hidden"><div style="height:100%;width:14%;background:var(--ink)"></div></div>'
+      +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">第一次辨識要下載約 2MB 的中文模型，之後就快了。</div>';
+    return;
+  }
+  var r=payload||{},lines=r.lines||[];
+  var fields=[['店名',r.name],['地址',r.addr],['電話',r.phone],['捷運站',r.metro]].filter(function(x){return x[1]});
+  ocrShotLast={fields:fields,lines:lines,raw:r.raw||''};
+  var h='<div style="font-size:13px;color:var(--ink2);text-align:left;line-height:1.7">讀到 <b>'+lines.length+'</b> 行文字'+(r.dropped?('（已濾掉 '+r.dropped+' 行雜訊）'):'')+'。想用哪一行，按右邊的「複製」自己貼進欄位。</div>';
+  if(fields.length){
+    h+='<label class="lb" style="margin-top:10px">認出來的欄位</label>';
+    fields.forEach(function(f){
+      h+='<div style="display:flex;gap:6px;align-items:center;margin:5px 0"><span style="flex:0 0 50px;font-size:12px;color:var(--ink2);text-align:left">'+f[0]+'</span><span style="flex:1;min-width:0;font-size:14.5px;text-align:left;word-break:break-all">'+esc(f[1])+'</span><button type="button" class="miniBtn" data-cp="'+escAttr(f[1])+'" style="padding:6px 9px">複製</button></div>';
+    });
+  }else{
+    h+='<div style="font-size:12.5px;color:#8A8674;text-align:left;margin-top:8px">沒有認出明確的店名或地址 — 看看下面的文字清單。</div>';
+  }
+  h+='<label class="lb" style="margin-top:12px">辨識出的文字（'+lines.length+' 行）</label><div style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px">';
+  if(!lines.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:8px;text-align:left">沒有辨識出有用的文字 — 換張更清楚的截圖（字大一點、別疊在花背景上）再試一次。</div>';
+  lines.forEach(function(l){
+    h+='<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><span style="flex:1;min-width:0;font-size:14px;text-align:left;word-break:break-all">'+esc(l)+'</span><button type="button" class="miniBtn" data-cp="'+escAttr(l)+'" style="padding:5px 9px">複製</button></div>';
+  });
+  h+='</div>';
+  if(r.raw)h+='<details style="margin-top:8px;text-align:left"><summary style="font-size:12px;color:var(--ink2)">看原始辨識文字</summary><div style="font-size:11.5px;color:#8A8674;white-space:pre-wrap;max-height:20vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:6px">'+esc(r.raw)+'</div></details>';
+  h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
+  body.innerHTML=h;
+  Array.prototype.forEach.call(body.querySelectorAll('[data-cp]'),function(b){b.addEventListener('click',function(){ocrShotCopy(b.getAttribute('data-cp'),b)})});
+  var ca=body.querySelector('#ocrShotCopyAll');
+  if(ca)ca.addEventListener('click',function(){
+    var all=[];fields.forEach(function(f){all.push(f[0]+'：'+f[1])});if(all.length)all.push('');
+    lines.forEach(function(l){all.push(l)});
+    ocrShotCopy(all.join('\n'),ca);
+  });
+  var ag=body.querySelector('#ocrShotAgain');
+  if(ag)ag.addEventListener('click',function(){ocrShotImg='';ocrShotRender('pick')});
+}
+(function(){
+  var b=document.getElementById('ocrShotBtn');
+  if(b)b.addEventListener('click',function(){ocrShotOpen()});
+  var c=document.getElementById('ocrShotClose');
+  if(c)c.addEventListener('click',ocrShotClose);
+  var ov=document.getElementById('ocrShotOverlay');
+  if(ov)ov.addEventListener('click',function(e){if(e.target===ov)ocrShotClose()});
+  document.addEventListener('paste',ocrShotPasteListener);
+})();
 Array.prototype.forEach.call(document.querySelectorAll('.clrBtn'),function(b){b.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(b.getAttribute('data-clr'));if(el){el.value='';try{el.dispatchEvent(new Event('input',{bubbles:true}))}catch(_e){}el.focus()}})});
 
 function ghTok(cb){var t=(localStorage.getItem(KEY+'_ghtoken')||'').trim();if(t)return cb(t);
@@ -2273,7 +2391,7 @@ $('#shareBtn').addEventListener('click',function(){refreshShareOverlay();$('#sha
 $('#shareClose').addEventListener('click',function(){$('#shareOverlay').classList.add('hide')});
 $('#shareOn').addEventListener('click',function(){
   if(!AUTH.user){toast('先用 Google 登入，才能分享你的地圖');return}
-  S.shareView=true;localStorage.setItem(KEY+'_sv','1');refreshShareOverlay();fbPushForce();toast('已開啟分享');
+  S.shareView=true;scopedSet('_sv','1');refreshShareOverlay();fbPushForce();toast('已開啟分享');
 });
 $('#copyShare').addEventListener('click',function(){
   refreshShareOverlay();
@@ -2558,7 +2676,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v129';
+var APP_VER='v132';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -2613,7 +2731,17 @@ function authStart(){
     if(u){
       lastEmailSet(u.email||'');
       FB.path='users/'+u.uid;FB.code=u.email;FB.ready=true;FB.lastPushed='';FB.lastT=0;
-      fbStart();fbProfilePull();setSync('syncing');
+      setSync('syncing');
+      var u0=u.uid;
+      var go=function(){if(myUid()!==u0)return;fbStart();fbProfilePull()};
+      /* v130：被綁定的共用地圖要先確認自己還在名單裡，否則絕不載入別人的地圖 */
+      if(S.sharedRoom){
+        FB.db.ref('shared/'+S.sharedRoom+'/members/'+u0).once('value').then(function(s){
+          if(myUid()!==u0)return;
+          if(s.val()!==true){var bad=S.sharedRoom;S.sharedRoom='';S.shareView=false;scopedSet('_ws','');scopedSet('_sv','0');wsForget(bad);load();renderAll();renderFolderChips();renderCatChips(S.draftCat);renderAcctUI();toast('這張共用地圖的名單裡已經沒有你 — 已切回你自己的地圖')}
+          go();
+        }).catch(function(){if(myUid()===u0)go()});
+      } else go();
       toast('✅ 已用 Google 登入：'+u.email);
     }else{
       if(FB.ref){FB.ref.off();FB.ref=null}
@@ -2738,11 +2866,13 @@ function fbProfilePush(){
 }
 function fbProfilePull(){
   if(!FB.db||!AUTH.user)return;
+  var u0=myUid();
   FB.db.ref('users/'+AUTH.user.uid+'/__profile').once('value').then(function(s){
+    if(myUid()!==u0)return;
     var d=s.val()||{};
     if('avatarColor' in d)S.avatarColor=d.avatarColor||'';
     if('avatarImage' in d)S.avatarImage=d.avatarImage||'';
-    try{localStorage.setItem(localScopeKey(),JSON.stringify(stateData()))}catch(e){}
+    try{localStorage.setItem(scopeKeyForUid(u0),JSON.stringify(stateData()))}catch(e){}
     renderAvatar();
   }).catch(function(){});
 }
@@ -2751,6 +2881,7 @@ function fbPath(){return (AUTH.user&&S.sharedRoom)?('shared/'+S.sharedRoom):('us
 function fbPushForce(){FB.lastPushed='';if(FB.ready)fbPush()}
 function fbPush(){
   if(!FB.ready||!AUTH.user||FB.applying)return;
+  if(!myUid())return;
   if(typeof isArchivedRoom==='function'&&isArchivedRoom())return;
   var d=stateData();delete d.user;delete d.avatarColor;delete d.avatarImage;
   var j=JSON.stringify(d);
@@ -2769,7 +2900,8 @@ function fbPush(){
   }
 }
 /* v67：雲端為準，整包套用 — 刪除、改名、顏色、分類增減全部同步 */
-function fbApply(d,silent){
+function fbApply(d,silent,forUid){
+  if(forUid!=null&&myUid()!==forUid)return;
   FB.applying=true;
   try{
     var dd=JSON.parse(JSON.stringify(d));delete dd._t;delete dd.user;
@@ -2791,7 +2923,7 @@ function fbApply(d,silent){
     applyState(dd);
     FB.lastPushed=JSON.stringify((function(){var x=stateData();delete x.user;return x})());
     FB.lastT=+(d._t||Date.now());
-    try{localStorage.setItem(localScopeKey(),JSON.stringify(stateData()));scopedSet('_savedAt',String(Date.now()))}catch(e){}
+    try{localStorage.setItem(forUid!=null?scopeKeyForUid(forUid):localScopeKey(),JSON.stringify(stateData()));scopedSet('_savedAt',String(Date.now()))}catch(e){}
 
     renderAll();renderFolderChips();renderCatChips(S.draftCat);
   }finally{FB.applying=false}
@@ -2800,31 +2932,35 @@ function fbApply(d,silent){
 function fbListen(){
   if(!FB.ready||!AUTH.user)return;
   if(FB.ref)FB.ref.off();
+  var u0=myUid();
   FB.ref=FB.db.ref(fbPath());
   FB.ref.on('value',function(s){
+    if(myUid()!==u0)return;
     var d=s.val();if(!d||FB.applying)return;
     if(d._t&&FB.lastT&&d._t<=FB.lastT)return;
     var j=JSON.stringify((function(){var x=JSON.parse(JSON.stringify(d));delete x._t;delete x.user;return x})());
     if(j===FB.lastPushed){FB.lastT=+(d._t||0);return}
-    fbApply(d);
+    fbApply(d,false,u0);
   },function(e){toast('雲端連線失敗：'+(e&&e.message||e))});
 }
 function fbStart(){
   if(!FB.ready||!AUTH.user)return;
+  var u0=myUid();
   FB.db.ref(fbPath()).once('value').then(function(s){
+    if(myUid()!==u0)return;
     var d=s.val();
     if(d){
       var ct=+(d._t||0);var cids={};(d.pins||[]).forEach(function(p){cids[p.id]=1});
       var local=(S.pins||[]).filter(function(p){return !cids[p.id]&&(+(p.created||0))>ct});
       var oldTrash=S.trash||{};
-      fbApply(d,true);
+      fbApply(d,true,u0);
       /* 本機離線期間新釘的店（且沒被刪過）補回來 */
       local=local.filter(function(p){return !(S.trash&&S.trash[p.id])});
-      if(local.length){S.pins=S.pins.concat(local);    try{localStorage.setItem(localScopeKey(),JSON.stringify(stateData()))}catch(e){}
+      if(local.length){S.pins=S.pins.concat(local);try{localStorage.setItem(scopeKeyForUid(u0),JSON.stringify(stateData()))}catch(e){}
 }
     }
     fbPush();fbListen();
-  }).catch(function(){fbPush();fbListen()});
+  }).catch(function(){if(myUid()!==u0)return;fbPush();fbListen()});
 }
 function fbSetup(){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
@@ -2924,25 +3060,28 @@ function viewLinkUI(){
       if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(link).then(function(){toast('已複製 — 貼給朋友就行')},function(){toast('複製失敗，請手動選取')});
     });
     document.getElementById('vlOff').addEventListener('click',function(){
-      S.shareView=false;localStorage.setItem(KEY+'_sv','0');ov.remove();
+      S.shareView=false;scopedSet('_sv','0');ov.remove();
       if(AUTH.user)FB.db.ref('view/'+AUTH.user.uid).remove().catch(function(){});
       toast('已關閉唯讀分享 — 舊網址立即失效');
     });
   }else{
     document.getElementById('vlOn').addEventListener('click',function(){
-      S.shareView=true;localStorage.setItem(KEY+'_sv','1');ov.remove();fbPushForce();
+      S.shareView=true;scopedSet('_sv','1');ov.remove();fbPushForce();
       toast('已開啟 — 再打開這個選單按「複製網址」');
     });
   }
 }
 function wsSwitch(code,cb){
   if(!AUTH.user){toast('先登入信箱才可以用這個功能（選單 → 帳號與同步）');if(cb)cb();return}
+  var u0=myUid();
   var go=function(){
-    S.sharedRoom=code||'';localStorage.setItem(KEY+'_ws',S.sharedRoom);
+    if(myUid()!==u0)return;
+    S.sharedRoom=code||'';scopedSet('_ws',S.sharedRoom||'');
     if(FB.ref){FB.ref.off();FB.ref=null}
     FB.db.ref(fbPath()).once('value').then(function(s){
       var d=s.val();
-      if(d)fbApply(d,true);else fbPush();
+      if(myUid()!==u0)return;
+      if(d)fbApply(d,true,u0);else fbPush();
       renderAll();
       renderAcctUI();
       fbListen();
@@ -2953,17 +3092,54 @@ function wsSwitch(code,cb){
   if(code)FB.db.ref('shared/'+code+'/members/'+AUTH.user.uid).set(true).then(go).catch(function(e){toast('加入共用地圖失敗：'+((e&&e.message)||e));if(cb)cb()});
   else go();
 }
-function wsRooms(){try{return JSON.parse(localStorage.getItem(KEY+'_wsr')||'[]')}catch(e){return []}}
-function wsSaveRooms(a){localStorage.setItem(KEY+'_wsr',JSON.stringify(a))}
+function wsRoomsRaw(){try{return JSON.parse(localStorage.getItem(KEY+'_wsr')||'[]')}catch(e){return []}}
+function wsRoomsMine(){try{return JSON.parse(scopedGet('_wsr','[]'))}catch(e){return []}}
+/* v130：清單分「這個帳號的」與「這台裝置上的舊紀錄」，組合後才能用；訪客一律看不到 */
+function wsRooms(){
+  if(!myUid())return [];
+  var mine=wsRoomsMine(),legacy=wsRoomsRaw(),out=mine.slice(),seen={};
+  mine.forEach(function(r){if(r&&r.code)seen[r.code]=1});
+  legacy.forEach(function(r){if(r&&r.code&&!seen[r.code]){out.push(r);seen[r.code]=1}});
+  return out;
+}
+function wsSaveRooms(a){if(!myUid())return;scopedSet('_wsr',JSON.stringify(a||[]))}
+/* v130：只有「我自己是成員（或我建立的）」才算我的地圖 */
+function wsMyLabel(){var u=(AUTH&&AUTH.user)||null;if(!u)return '';var n=((u.displayName||'')+'').trim();return n||((u.email||'')+'')}
+function wsIsOwner(rm){if(!rm||!myUid())return false;if(rm.creator)return rm.creator===myUid();return rm.role==='owner'}
+function wsBindLabel(rm){
+  if(!rm)return '';
+  if(wsIsOwner(rm))return '這是你建立的地圖 — 只有你可以改名';
+  var nm=((rm.creatorName||'')+'').trim();
+  return nm?('與 '+nm+' 帳號綁定 — 只有建立者可以改名'):'與朋友的帳號綁定 — 只有建立者可以改名';
+}
+var wsNameSent={};
+function wsRenameRoom(code,nm,done){
+  var rm=wsRoomObj(code);
+  if(!rm){if(done)done(false,'找不到這張共用地圖');return}
+  if(!wsIsOwner(rm)){if(done)done(false,'只有建立這張地圖的人可以改名稱');return}
+  nm=((nm||'')+'').trim();
+  if(!nm){if(done)done(false,'名稱不能空白');return}
+  if(nm.length>6)nm=nm.slice(0,6);
+  var nm0=((rm.name||'')+'');
+  if(nm===nm0){if(done)done(true,'名稱沒有變');return}
+  wsUpsertRoom({code:code,name:nm});
+  if(!FB.db){if(done)done(true,'名稱已更新');return}
+  FB.db.ref('shared/'+code+'/__meta').update({name:nm,nameBy:myUid(),nameAt:Date.now()}).then(function(){if(done)done(true,'名稱已更新')},function(e){
+    wsUpsertRoom({code:code,name:nm0});
+    if(done)done(false,'改名失敗：'+((e&&e.message)||e));
+  });
+}
+function wsVerified(r){if(!r||!r.code||!myUid())return false;if(r.memberUids&&r.memberUids.indexOf(myUid())>=0)return true;return !!(r.creator===myUid()||(r.role==='owner'&&!r.memberUids))}
+function wsForget(code){wsSaveRooms(wsRoomsMine().filter(function(r){return r.code!==code}))}
 function wsRoomObj(code){var rooms=wsRooms();for(var i=0;i<rooms.length;i++)if(rooms[i].code===code)return rooms[i];return null}
 function wsUpsertRoom(room){
-  var rooms=wsRooms(),hit=false;
+  var rooms=wsRoomsMine(),hit=false;
   rooms=rooms.map(function(r){if(r.code!==room.code)return r;hit=true;var x={};Object.keys(r).forEach(function(k){x[k]=r[k]});Object.keys(room).forEach(function(k){x[k]=room[k]});return x});
   if(!hit)rooms.push(room);
   wsSaveRooms(rooms);
   return rooms;
 }
-function wsRemoveRoom(code){var rooms=wsRooms().filter(function(r){return r.code!==code});wsSaveRooms(rooms);return rooms}
+function wsRemoveRoom(code){var rooms=wsRoomsMine().filter(function(r){return r.code!==code});wsSaveRooms(rooms);return rooms}
 function wsDefaultRoomName(rm,i){return (rm.name&&rm.name.trim())?rm.name.trim():('共用地圖 '+(i+1))}
 function wsRoomStatus(rm){
   if(rm.archivedAt)return '已封存 · 不再同步';
@@ -2971,13 +3147,19 @@ function wsRoomStatus(rm){
 }
 function wsRefreshRoomInfo(code,done){
   if(!AUTH.user||!FB.db){if(done)done();return}
+  var u0=myUid();
   FB.db.ref('shared/'+code).once('value').then(function(s){
+    if(myUid()!==u0){if(done)done();return}
     var d=s.val()||{},meta=d.__meta||{},members=d.members||{},old=wsRoomObj(code)||{code:code};
     var memberUids=Object.keys(members||{});
+    if(memberUids.indexOf(u0)<0){wsRemoveRoom(code);if(done)done();return}/* v130：不在名單裡就不算我的地圖 */
     var patch={code:code,membersCount:memberUids.length||0,memberUids:memberUids,archivedAt:+(meta.archivedAt||0)||0};
     if(meta.name)patch.name=meta.name;
+    if(meta.creatorName)patch.creatorName=meta.creatorName;
     if(meta.creator){patch.creator=meta.creator;patch.role=(meta.creator===AUTH.user.uid)?'owner':'member'}
     wsUpsertRoom((function(){var x={};Object.keys(old).forEach(function(k){x[k]=old[k]});Object.keys(patch).forEach(function(k){x[k]=patch[k]});return x})());
+    /* v131：老地圖沒有建立者名稱時，由建立者自己補寫一次（只寫一次、只寫自己的名字） */
+    if(meta.creator===u0&&!meta.creatorName&&!wsNameSent[code]){wsNameSent[code]=1;var myn=wsMyLabel();if(myn)FB.db.ref('shared/'+code+'/__meta').update({creatorName:myn}).catch(function(){})}
     if(done)done();
   }).catch(function(){if(done)done()});
 }
@@ -3047,9 +3229,9 @@ function wsQuickAdd(onDone){
       var btn=this;btn.disabled=true;
       if(mode==='create'){
         var code=createCode,roomName=nameTxt||('共用地圖 '+(wsRooms().length+1));
-        var payload={'__meta':{name:roomName,creator:AUTH.user.uid,created:Date.now()}};payload['members/'+AUTH.user.uid]=true;
+        var payload={'__meta':{name:roomName,creator:AUTH.user.uid,creatorName:wsMyLabel(),created:Date.now()}};payload['members/'+AUTH.user.uid]=true;
         FB.db.ref('shared/'+code).update(payload).then(function(){
-          wsUpsertRoom({code:code,name:roomName,role:'owner',creator:AUTH.user.uid,membersCount:1});
+          wsUpsertRoom({code:code,name:roomName,role:'owner',creator:AUTH.user.uid,creatorName:wsMyLabel(),membersCount:1});
           wsSwitch(code,function(){wsRefreshRoomInfo(code,function(){done(function(){toast('共用地圖已建立 — 把邀請碼傳給朋友就能一起用')})})});
         }).catch(function(e){btn.disabled=false;toast('建立共用地圖失敗：'+((e&&e.message)||e))});
       }else{
@@ -3062,7 +3244,7 @@ function wsQuickAdd(onDone){
           if(meta.archivedAt){btn.disabled=false;toast('這張共用地圖已封存，請重新綁定新的');return}
           if(Object.keys(members).length>=2&&!members[AUTH.user.uid]){btn.disabled=false;toast('這張共用地圖已滿 2 人，不能再加入');return}
           wsSwitch(code,function(){
-            wsUpsertRoom({code:code,name:nameTxt||meta.name||'',role:'member',creator:meta.creator||'',membersCount:Object.keys(members).length||0,memberUids:Object.keys(members)});
+            wsUpsertRoom({code:code,name:nameTxt||meta.name||'',role:'member',creator:meta.creator||'',creatorName:meta.creatorName||'',membersCount:Object.keys(members).length||0,memberUids:Object.keys(members)});
             wsRefreshRoomInfo(code,function(){done(function(){toast('已加入共用地圖')})});
           });
         }).catch(function(e){btn.disabled=false;toast('加入共用地圖失敗：'+((e&&e.message)||e))});
@@ -3077,7 +3259,7 @@ function sharedUI(){
   var oldMenu=$('#meMenu');if(oldMenu)oldMenu.remove();
   var oldWs=document.getElementById('wsOverlay');if(oldWs)oldWs.remove();
   var ov=document.createElement('div');ov.id='wsOverlay';
-  var hydrated=false;
+  var hydrated=false,renaming='';
   function close(){ov.remove()}
   function render(skipHydrate){
     if(!AUTH.user){
@@ -3089,15 +3271,19 @@ function sharedUI(){
       document.getElementById('wsNeedLogin').addEventListener('click',function(){close();acctUI()});
       return;
     }
-    var rooms=wsRooms(),activeCount=rooms.filter(function(r){return !r.archivedAt}).length;
+    var allRooms=wsRooms(),rooms=allRooms.filter(wsVerified),pendingRooms=allRooms.length-rooms.length,activeCount=rooms.filter(function(r){return !r.archivedAt}).length;
     var h='<div class="wsCard"><h4>共用地圖</h4>';
     h+='<div class="wsSub">一張共用地圖固定給兩個人一起用，最多 4 張。圖釘外框：粉色＝建立者、咖啡色＝加入的人。</div>';
     h+='<button type="button" id="wsOpenQuick" class="wsTopBtn"'+(activeCount>=4?' disabled style="opacity:.45;cursor:not-allowed"':'')+'>＋ 綁定新的共用地圖</button>';
     h+='<div class="wsSection" style="max-height:42vh;overflow:auto;text-align:left;margin-top:12px">';
-    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:4px 0">目前還沒有共用地圖；按上面的按鈕就能建立或加入。</div>';
+    if(!rooms.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:4px 0">'+(pendingRooms?'正在確認這個帳號的共用地圖…':'目前還沒有共用地圖；按上面的按鈕就能建立或加入。')+'</div>';
     rooms.forEach(function(rm,i){
-      var cur=S.sharedRoom===rm.code,nm=wsDefaultRoomName(rm,i),fs=nm.length<=4?15:(nm.length<=5?14:13),arch=!!rm.archivedAt;
-      h+='<div style="display:flex;gap:6px;align-items:center;margin:6px 0"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>'+(arch?'📦':'👥')+'</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><div style="display:flex;flex-direction:column;gap:4px">'+(arch?'<button type="button" class="danger" data-wsdel="'+rm.code+'" style="padding:6px 8px">永久刪除</button>':'<button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:6px 8px">解除綁定</button>')+'</div></div>';
+      var cur=S.sharedRoom===rm.code,nm=wsDefaultRoomName(rm,i),fs=nm.length<=4?15:(nm.length<=5?14:13),arch=!!rm.archivedAt,own=wsIsOwner(rm);
+      if(renaming===rm.code){
+        h+='<div style="margin:6px 0;padding:8px;border:1.5px solid var(--ink);border-radius:10px"><div style="font-size:12px;color:var(--ink2);text-align:left">改這張共用地圖的名稱（最多 6 個字）</div><input class="txt" id="wsRenInput" maxlength="6" placeholder="例如：跟阿嬌的" value="'+escAttr(nm)+'" style="width:100%;margin-top:6px;font-size:16px"><div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="primary" id="wsRenSave" style="flex:1">儲存</button><button type="button" id="wsRenCancel" style="flex:1">取消</button></div></div>';
+        return;
+      }
+      h+='<div style="margin:6px 0"><div style="display:flex;gap:6px;align-items:center"><button type="button" class="suggRow" data-ws="'+rm.code+'" style="flex:1;justify-content:flex-start;min-width:0'+(cur?';outline:2px solid #7B9E6B':'')+'"><span>'+(arch?'📦':'👥')+'</span><span style="text-align:left;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:'+fs+'px">'+esc(nm)+'</b><small style="color:var(--ink2)">'+(cur?'✅ ':'')+esc(wsRoomStatus(rm))+' · '+escAttr(rm.code)+'</small></span></button><div style="display:flex;flex-direction:column;gap:4px">'+(own?'<button type="button" data-wsren="'+rm.code+'" style="padding:6px 8px">改名</button>':'')+(arch?'<button type="button" class="danger" data-wsdel="'+rm.code+'" style="padding:6px 8px">永久刪除</button>':'<button type="button" class="danger" data-wsact="'+rm.code+'" style="padding:6px 8px">解除綁定</button>')+'</div></div><div style="font-size:11.5px;color:#8A8674;text-align:left;margin:3px 0 0 4px">'+esc(wsBindLabel(rm))+'</div></div>';
     });
     h+='</div>';
     if(S.sharedRoom){
@@ -3113,6 +3299,15 @@ function sharedUI(){
     var ccb=document.getElementById('wsCurCopy');
     if(ccb)ccb.addEventListener('click',function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(S.sharedRoom).then(function(){toast('邀請碼已複製')},function(){toast('複製失敗，請手動選取')})});
     ov.querySelectorAll('[data-ws]').forEach(function(b){b.addEventListener('click',function(){var c=b.dataset.ws;if(S.sharedRoom===c){toast('已經在使用這張地圖');return}wsSwitch(c,function(){hydrated=false;render()})})});
+    ov.querySelectorAll('[data-wsren]').forEach(function(b){b.addEventListener('click',function(){renaming=b.dataset.wsren;render(true)})});
+    var renSave=document.getElementById('wsRenSave');
+    if(renSave)renSave.addEventListener('click',function(){
+      var btn0=renSave,code0=renaming,val0=(document.getElementById('wsRenInput').value||'');
+      btn0.disabled=true;btn0.textContent='儲存中…';
+      wsRenameRoom(code0,val0,function(ok,msg){renaming='';render(true);toast(msg)});
+    });
+    var renCancel=document.getElementById('wsRenCancel');
+    if(renCancel)renCancel.addEventListener('click',function(){renaming='';render(true)});
     ov.querySelectorAll('[data-wsact]').forEach(function(b){b.addEventListener('click',function(){
       var code=b.dataset.wsact,rm=wsRoomObj(code);if(!rm||!AUTH.user)return;
       if(!window.confirm('解除綁定後，你們不會再同步更新這張地圖。\n\n如果之後重新綁定，會是新的共用地圖。\n已刪除的圖釘不會恢復。\n\n確定要解除綁定嗎？'))return;
