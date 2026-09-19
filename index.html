@@ -547,7 +547,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 
     <input type="file" id="importFile" accept=".json,application/json" class="hide">
 
-    <button type="button" class="miniBtn" id="ocrShotBtn" style="width:100%;margin:2px 0 14px">📷 從截圖讀文字（自動填店名、地址）</button>
+    <button type="button" class="miniBtn" id="ocrShotBtn" style="width:100%;margin:2px 0 14px">📷 從截圖讀文字（店名、地址、簡介）</button>
 
     <label class="lb" for="fName">店名 / 地點名稱</label>
       <span class="fieldWrap"><input class="txt" id="fName" type="text" placeholder="例如：OO 燒肉"><button type="button" class="clrBtn" data-clr="fName" aria-label="清空店名">×</button></span>
@@ -605,6 +605,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
       </div>
 
       <button class="saveBtn" id="saveBtn">釘起來</button>
+      <button type="button" class="delBtn hide" id="copyToSharedBtn">加入共用地圖</button>
       <button class="delBtn hide" id="copyToPersonalBtn" style="background:#F7E8EF;color:#9C466B;border-color:#EEC9D9">複製到我的個人地圖</button>
       <button class="delBtn hide" id="delBtn">刪除這筆紀錄</button>
       <button class="delBtn hide" id="sharePinBtn" style="background:#EEF3E8;color:#4C6B3C">📤 分享給朋友</button>
@@ -1537,6 +1538,7 @@ function openPin(id){
   setStatusSeg(p?p.status:'todo');
   S.rating=p?(shared?currentUserRating(p):(p.rating||0)):0;
   renderHearts();renderCatChips(p?p.cat:'food');
+  $('#copyToSharedBtn').classList.toggle('hide',shared||!p);
   var copyBtn=$('#copyToPersonalBtn');
   if(copyBtn){copyBtn.classList.toggle('hide',!(shared&&p));copyBtn.textContent='複製到我的個人地圖'}
   $('#delBtn').classList.toggle('hide',!(p&&canDeletePin(p)));
@@ -1839,8 +1841,8 @@ function ocrShotRun(src){
 }
 function ocrShotFill(kind,val,force){
   if(!val)return false;
-  var el=(kind==='name')?$('#fName'):((kind==='addr')?$('#fAddr'):null);
-  if(!el)return false;
+  var el=({name:$('#fName'),addr:$('#fAddr'),intro:$('#fIntro')})[kind];
+  if(!el||el.disabled)return false;
   if(!force&&el.value&&el.value.trim())return false;
   el.value=val;
   try{el.dispatchEvent(new Event('input',{bubbles:true}))}catch(e){}
@@ -1852,7 +1854,7 @@ function ocrShotRender(stage,payload){
   if(stage==='pick'){
     body.innerHTML='<div class="ceBtns" style="margin-top:0"><button type="button" class="primary" id="ocrPickFile" style="flex:1;padding:15px 0;font-size:15.5px">選截圖／拍照</button><button type="button" id="ocrPickPaste" style="flex:1;padding:15px 0;font-size:15.5px">貼上圖片</button></div>'
       +'<div id="ocrPasteHint" style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">選好後可在圖上<b>按住拖曳框出</b>要讀的那一塊（框小一點比較準），不想框就直接讀整張。電腦可先複製圖片再按 Ctrl+V。iPhone 原況照片（HEIC）可能讀不進來，請用截圖。</div>'
-      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">讀完會<b>自動填進店名與地址欄位</b>（欄位已經有字的會保留，不會被蓋掉）。</div>'
+      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">讀完會<b>自動填進店名與地址欄位</b>（欄位已經有字的會保留，不會被蓋掉）。簡介可勾選文字、修改後再填入。</div>'
       +'<textarea id="ocrPasteBox" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></textarea>';
     body.querySelector('#ocrPickFile').addEventListener('click',function(){
       var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
@@ -1896,9 +1898,25 @@ function ocrShotRender(stage,payload){
     h+='<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><span style="flex:1;min-width:0;font-size:14px;text-align:left;word-break:break-all">'+esc(l)+'</span><button type="button" class="miniBtn" data-cp="'+escAttr(l)+'" style="padding:5px 9px">複製</button></div>';
   });
   h+='</div>';
+  var introLines=ocrRawLines(r.raw||lines.join('\n'));
+  h+='<label class="lb" style="margin-top:12px">選擇要填入簡介的文字</label><div style="font-size:12px;text-align:left;color:var(--ink2)">可選店家特色、菜單或營業時間。勾選後可在下方修改文字。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
+  introLines.forEach(function(l,i){h+='<label style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;overflow-wrap:anywhere"><input type="checkbox" data-intro-line="'+i+'" style="flex:none;margin-top:4px"><span>'+esc(l)+'</span></label>'});
+  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的簡介" placeholder="勾選上方文字，或在這裡整理簡介" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">填入簡介</button><button type="button" id="ocrIntroAppend">接在原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div>';
   if(r.raw)h+='<details style="margin-top:8px;text-align:left"><summary style="font-size:12px;color:var(--ink2)">看原始辨識文字</summary><div style="font-size:11.5px;color:#8A8674;white-space:pre-wrap;max-height:20vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:6px">'+esc(r.raw)+'</div></details>';
   h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
   body.innerHTML=h;
+  body.querySelectorAll('[data-intro-line]').forEach(function(b){b.addEventListener('change',function(){
+    body.querySelector('#ocrIntroDraft').value=Array.prototype.filter.call(body.querySelectorAll('[data-intro-line]'),function(c){return c.checked}).map(function(c){return introLines[+c.getAttribute('data-intro-line')]}).join('\n');
+  })});
+  function fillIntro(append){
+    var val=body.querySelector('#ocrIntroDraft').value.trim(),el=$('#fIntro');
+    if(!val){toast('先勾選文字或輸入簡介');return}
+    if(!el||el.disabled){toast('這筆圖釘的簡介目前不能修改');return}
+    if(!append&&el.value.trim()&&!window.confirm('要用這些文字取代原本的簡介嗎？'))return;
+    if(ocrShotFill('intro',append&&el.value.trim()?el.value.trim()+'\n'+val:val,true))body.querySelector('#ocrIntroStatus').textContent='已填入簡介，關閉讀文字視窗後記得儲存圖釘。';
+  }
+  body.querySelector('#ocrIntroFill').addEventListener('click',function(){fillIntro(false)});
+  body.querySelector('#ocrIntroAppend').addEventListener('click',function(){fillIntro(true)});
   Array.prototype.forEach.call(body.querySelectorAll('[data-cp]'),function(b){b.addEventListener('click',function(){ocrShotCopy(b.getAttribute('data-cp'),b)})});
   Array.prototype.forEach.call(body.querySelectorAll('[data-fill]'),function(b){b.addEventListener('click',function(){
     var k=b.getAttribute('data-fill'),v=b.getAttribute('data-val');
@@ -2250,6 +2268,53 @@ $('#copyToPersonalBtn').addEventListener('click',function(){
     var d=s.val()||{};if(!Array.isArray(d.pins))d.pins=[];d.pins.push(clone);
     return FB.db.ref('users/'+uid).update({pins:d.pins,_t:Date.now()});
   }).then(function(){toast('已複製到我的個人地圖')}).catch(function(e){toast('複製失敗：'+((e&&e.message)||e))});
+});
+/* v134：個人圖釘複製到選定的共用地圖，保留個人原件。 */
+function sharedPinCopy(p,uid,includeNote){
+  var c=JSON.parse(JSON.stringify(p));
+  c.id='copy_'+uid+'_'+p.id;c.sourcePersonalId=String(p.id);c.ownerUid=uid;
+  c.created=Date.now();c.updated=c.created;c.pub=false;c.folder='';
+  c.note=includeNote?(p.note||''):'';c.rating=includeNote?(p.rating||0):0;
+  c.memberNotes={};c.memberRatings={};c.memberNotes[uid]=c.note;c.memberRatings[uid]=c.rating;
+  return c;
+}
+function sharedCopyUpdate(d,clone,uid){
+  if(!d||!d.members||d.members[uid]!==true||(d.__meta&&d.__meta.archivedAt))return;
+  var pins=Array.isArray(d.pins)?d.pins:[];
+  if(pins.some(function(p){return p&&(p.id===clone.id||(p.ownerUid===uid&&p.sourcePersonalId===clone.sourcePersonalId))}))return;
+  d.pins=pins.concat([clone]);
+  if(d.trash)delete d.trash[clone.id];
+  d._t=Date.now();return d;
+}
+$('#copyToSharedBtn').addEventListener('click',function(){
+  var p=S.pins.find(function(x){return x.id===S.editing});
+  if(!p||isSharedMode())return;
+  if(!AUTH.user||!FB.db){toast('請先登入，再加入共用地圖');return}
+  var uid=myUid(),source=JSON.parse(JSON.stringify(p)),rooms=wsRooms().filter(function(r){return !r.archivedAt&&wsVerified(r)});
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var h='<div class="ceCard"><h4>加入共用地圖</h4><div style="font-size:13px;text-align:left;line-height:1.7">將已儲存的「'+esc(p.name||'未命名地點')+'」複製一份，個人圖釘會保留。剛修改的內容請先儲存。店名、地址、簡介、內頁及連結會一起分享；之後兩份各自修改。</div>';
+  h+='<label style="display:flex;gap:8px;text-align:left;margin:12px 0"><input type="checkbox" id="wsCopyNotes">也分享我的心得與評分</label><div style="max-height:40vh;overflow:auto">';
+  rooms.forEach(function(r,i){h+='<button type="button" class="miniBtn" data-copy-room="'+i+'" style="display:block;width:100%;margin:8px 0;padding:12px">'+esc(wsDefaultRoomName(r,i))+'</button>'});
+  if(!rooms.length)h+='<p>目前沒有可加入的共用地圖。請從選單「共用地圖」先建立或加入一張。</p>';
+  h+='</div><div id="wsCopyStatus" role="status" style="text-align:left;font-size:13px"></div><div class="ceBtns"><button type="button" id="wsCopyClose">關閉</button></div></div>';
+  ov.innerHTML=h;document.body.appendChild(ov);
+  ov.querySelector('#wsCopyClose').onclick=function(){ov.remove()};
+  ov.querySelectorAll('[data-copy-room]').forEach(function(b){b.onclick=function(){
+    if(myUid()!==uid){ov.remove();toast('帳號已變更，請重新選擇');return}
+    var room=rooms[+b.getAttribute('data-copy-room')],clone=sharedPinCopy(source,uid,ov.querySelector('#wsCopyNotes').checked);
+    var buttons=ov.querySelectorAll('[data-copy-room]'),status=ov.querySelector('#wsCopyStatus');
+    buttons.forEach(function(x){x.disabled=true});status.textContent='加入中…';
+    var ref=FB.db.ref('shared/'+room.code);
+    ref.once('value').then(function(s){
+      if(myUid()!==uid)throw new Error('帳號已變更，請重新選擇');
+      var d=s.val();
+      if(!d||!d.members||d.members[uid]!==true)throw new Error('你已不在這張共用地圖的名單內');
+      if(d.__meta&&d.__meta.archivedAt)throw new Error('這張共用地圖已封存');
+      return ref.transaction(function(current){if(myUid()!==uid)return;return sharedCopyUpdate(current,clone,uid)},undefined,false);
+    }).then(function(result){
+      status.textContent=result.committed?'已加入「'+wsDefaultRoomName(room,0)+'」，個人圖釘也已保留。':'未重複加入：這筆圖釘已存在，或地圖權限已變更。';
+    }).catch(function(e){status.textContent='加入失敗：'+(e.message||e)}).then(function(){buttons.forEach(function(x){x.disabled=false})});
+  }});
 });
 /* ---------- 示範資料 ---------- */
 var SAMPLES=[
@@ -2705,7 +2770,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v133';
+var APP_VER='v134';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
@@ -3414,7 +3479,6 @@ else if(h.indexOf('error=')>=0){history.replaceState(null,'',location.pathname+l
 try{if(!localStorage.getItem(KEY+'_acctHint')){localStorage.setItem(KEY+'_acctHint','1');setTimeout(function(){toast('右上角頭像：登入 Google 開雲端同步，或下載／還原備份')},1100)}}catch(e){}
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
