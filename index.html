@@ -1716,54 +1716,90 @@ function ocrFieldGuess(lines){
 /*OCR-PURE-END*/
 /* 已移除搜尋店家 / 截圖取字 */
 /* v72：先框選要抓的文字範圍，避開雜亂背景 — 辨識成功率大幅提升 */
+/* v136: normalized crop geometry, shared by pointer gestures and tests. */
+function ocrCropRect(start,p,minX,minY){
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+  var r=start.rect,dx=p.x-start.x,dy=p.y-start.y;
+  if(start.mode==='draw')return {x0:Math.min(start.x,p.x),y0:Math.min(start.y,p.y),x1:Math.max(start.x,p.x),y1:Math.max(start.y,p.y)};
+  if(start.mode==='move'){
+    dx=clamp(dx,-r.x0,1-r.x1);dy=clamp(dy,-r.y0,1-r.y1);
+    return {x0:r.x0+dx,y0:r.y0+dy,x1:r.x1+dx,y1:r.y1+dy};
+  }
+  var out={x0:r.x0,y0:r.y0,x1:r.x1,y1:r.y1};
+  if(start.mode.indexOf('w')>=0)out.x0=clamp(r.x0+dx,0,r.x1-minX);
+  if(start.mode.indexOf('e')>=0)out.x1=clamp(r.x1+dx,r.x0+minX,1);
+  if(start.mode.indexOf('n')>=0)out.y0=clamp(r.y0+dy,0,r.y1-minY);
+  if(start.mode.indexOf('s')>=0)out.y1=clamp(r.y1+dy,r.y0+minY,1);
+  return out;
+}
 function openOcrCrop(dataUrl,onOk,onCancel){
   var ov=document.createElement('div');ov.id='chipEditOverlay';
-  ov.innerHTML='<div class="ceCard" style="max-width:560px"><h4>\u2702\ufe0f \u6846\u9078\u8981\u6293\u7684\u6587\u5b57</h4>'
-    +'<div style="font-size:12.5px;color:var(--ink2);text-align:left;line-height:1.6">\u5728\u5716\u4e0a<b>\u6309\u4f4f\u62d6\u66f3</b>\uff0c\u6846\u51fa\u6709\u5e97\u540d/\u5730\u5740\u7684\u90a3\u4e00\u584a\uff08\u6846\u8d8a\u5c0f\u8d8a\u6e96\uff09\u3002\u6846\u597d\u5f8c\u6309\u4e0b\u65b9\u7da0\u8272\u5927\u6309\u9215\u300c\u78ba\u8a8d\u6846\u9078\u4e26\u8b80\u53d6\u300d\u3002\u4e0d\u60f3\u6846\u5c31\u6309\u300c\u8fa8\u8b58\u6574\u5f35\u300d\u3002</div>'
-    +'<div id="ocWrap" style="position:relative;margin-top:8px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" style="display:block;width:100%;border-radius:8px" src="'+dataUrl+'"><div id="ocSel" style="position:absolute;display:none;border:2px dashed #E2452C;background:rgba(226,69,44,.12);pointer-events:none"></div></div>'
-    +'<div id="ocState" style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">\u9084\u6c92\u6709\u6846\u9078\uff0c\u6846\u597d\u5f8c\u7da0\u8272\u6309\u9215\u6703\u4eae\u8d77\u4f86\u3002</div>'
-    +'<button type="button" id="ocConfirm" class="primary" disabled style="width:100%;margin-top:8px">\u78ba\u8a8d\u6846\u9078\u4e26\u8b80\u53d6</button>'
-    +'<div class="ceBtns"><button type="button" id="ocCancel">\u53d6\u6d88</button><button type="button" class="primary" id="ocGo" disabled style="display:none">\u8fa8\u8b58\u9078\u53d6\u7bc4\u570d</button></div></div>';
+  ov.innerHTML='<div class="ceCard" style="max-width:560px"><h4>框選要抓的文字</h4>'
+    +'<div style="font-size:13px;color:var(--ink2);text-align:left;line-height:1.7">拖曳圖片畫出選取框。<b>拖框內可移動，拉四角可放大或縮小</b>；圖片右上角的 × 只清除這次選取。選好後按「確認框選並讀取」。</div>'
+    +'<div id="ocWrap" style="position:relative;margin-top:10px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair"><img id="ocImg" draggable="false" alt="要辨識的截圖" style="display:block;width:100%;border-radius:8px">'
+    +'<div id="ocSel" style="position:absolute;display:none;box-sizing:border-box;border:2px solid #E2452C;background:rgba(226,69,44,.12);cursor:move;touch-action:none" aria-label="選取框，可拖曳移動"></div>'
+    +'<button type="button" id="ocClear" aria-label="取消這次選取" title="取消這次選取" style="display:none;position:absolute;right:4px;top:4px;z-index:4;width:40px;height:40px;border:2px solid #E2452C;border-radius:50%;background:#fff;color:#B3351E;font-size:26px;line-height:1;box-shadow:0 2px 6px #0003;cursor:pointer">×</button></div>'
+    +'<div id="ocState" role="status" style="font-size:12px;color:var(--ink2);margin-top:10px;text-align:left">圖片載入中…</div>'
+    +'<button type="button" id="ocConfirm" disabled style="width:100%;min-height:48px;padding:12px;margin-top:10px;border:2px solid var(--ink);border-radius:12px;background:var(--ink);color:#fff;font:inherit;font-weight:700">確認框選並讀取</button>'
+    +'<div class="ceBtns"><button type="button" id="ocCancel">取消讀取</button></div></div>';
   document.body.appendChild(ov);
-  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),go=ov.querySelector('#ocGo'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap'),stateTxt=ov.querySelector('#ocState');
-  var st=null,rect=null;
-  function pos(e){var r=img.getBoundingClientRect();return{x:Math.min(Math.max(0,(e.clientX-r.left)/r.width),1),y:Math.min(Math.max(0,(e.clientY-r.top)/r.height),1)}}
-  function draw(){if(!rect)return;var r=img.getBoundingClientRect();sel.style.display='block';sel.style.left=(rect.x0*r.width)+'px';sel.style.top=(rect.y0*r.height)+'px';sel.style.width=((rect.x1-rect.x0)*r.width)+'px';sel.style.height=((rect.y1-rect.y0)*r.height)+'px'}
+  var img=ov.querySelector('#ocImg'),sel=ov.querySelector('#ocSel'),okBtn=ov.querySelector('#ocConfirm'),wrap=ov.querySelector('#ocWrap'),stateTxt=ov.querySelector('#ocState'),clear=ov.querySelector('#ocClear');
+  var st=null,rect=null,busy=false,ready=false;
+  ['nw','ne','sw','se'].forEach(function(corner){
+    var h=document.createElement('span');h.dataset.corner=corner;
+    h.style.cssText='position:absolute;width:32px;height:32px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:'+corner+'-resize;'+(corner.indexOf('n')>=0?'top:-16px;':'bottom:-16px;')+(corner.indexOf('w')>=0?'left:-16px;':'right:-16px;');
+    h.innerHTML='<span style="display:block;width:14px;height:14px;background:#fff;border:2px solid #E2452C;border-radius:50%;pointer-events:none"></span>';
+    sel.appendChild(h);
+  });
+  function pos(e){var r=img.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/Math.max(1,r.width))),y:Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height)))}}
+  function valid(){var b=img.getBoundingClientRect();return rect&&(rect.x1-rect.x0)*b.width>=24&&(rect.y1-rect.y0)*b.height>=24}
+  function draw(){
+    sel.style.display=rect?'block':'none';clear.style.display=rect?'block':'none';
+    if(rect){sel.style.left=(rect.x0*100)+'%';sel.style.top=(rect.y0*100)+'%';sel.style.width=((rect.x1-rect.x0)*100)+'%';sel.style.height=((rect.y1-rect.y0)*100)+'%'}
+    okBtn.disabled=busy||!ready||!valid();okBtn.style.opacity=okBtn.disabled?'.5':'1';
+  }
+  function release(){var active=st;st=null;if(active)try{wrap.releasePointerCapture(active.pointerId)}catch(e){}}
+  function clearRect(){if(busy)return;release();rect=null;draw();stateTxt.textContent='已取消這次選取，可以重新框選。'}
+  clear.addEventListener('pointerdown',function(e){e.stopPropagation()});
+  clear.addEventListener('click',function(e){e.stopPropagation();clearRect()});
   wrap.addEventListener('pointerdown',function(e){
-    if(e.button>0)return;e.preventDefault();
-    var p=pos(e);st={ax:p.x,ay:p.y};rect={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
-    try{wrap.setPointerCapture(e.pointerId)}catch(err){}
+    if(busy||!ready||st||e.button>0||e.target.closest('#ocClear'))return;
+    e.preventDefault();var p=pos(e),h=e.target.closest('[data-corner]');
+    st={x:p.x,y:p.y,rect:rect?Object.assign({},rect):null,mode:rect&&h?h.dataset.corner:(rect&&sel.contains(e.target)?'move':'draw'),pointerId:e.pointerId};
+    if(st.mode==='draw')rect={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
+    try{wrap.setPointerCapture(e.pointerId)}catch(err){}draw();
   });
   wrap.addEventListener('pointermove',function(e){
-    if(!st)return;e.preventDefault();
-    var p=pos(e);rect.x1=p.x;rect.y1=p.y;
-    rect.x0=Math.min(st.ax,rect.x1);rect.x1=Math.max(st.ax,rect.x1);
-    rect.y0=Math.min(st.ay,rect.y1);rect.y1=Math.max(st.ay,rect.y1);
-    draw();go.disabled=false;okBtn.disabled=false;stateTxt.textContent='已框選範圍，按上面的「確認框選並讀取」開始擷取';
+    if(!st||e.pointerId!==st.pointerId||busy)return;e.preventDefault();
+    var b=img.getBoundingClientRect();
+    rect=ocrCropRect(st,pos(e),Math.min(24/Math.max(1,b.width),st.rect?st.rect.x1-st.rect.x0:1),Math.min(24/Math.max(1,b.height),st.rect?st.rect.y1-st.rect.y0:1));
+    draw();stateTxt.textContent='可以繼續移動或拉四角調整，完成後按「確認框選並讀取」。';
   });
-  function endDrag(){if(!st)return;st=null;
-    if(rect&&(rect.x1-rect.x0)*(rect.y1-rect.y0)<0.001){rect=null;sel.style.display='none';go.disabled=true;okBtn.disabled=true;stateTxt.textContent='框選太小，請再框一次'}
-    else if(rect){stateTxt.textContent='已框好，按上面的「確認框選並讀取」開始讀取'}
+  function endDrag(e,cancelled){
+    if(!st||e.pointerId!==st.pointerId)return;
+    if(cancelled)rect=st.rect;release();
+    if(rect&&!valid()){rect=null;stateTxt.textContent='選取框太小，請重新框大一點。'}
+    else stateTxt.textContent=rect?'已框好，可以移動、調整大小，或確認讀取。':'請在圖片上拖曳框選文字。';
+    draw();
   }
-  wrap.addEventListener('pointerup',endDrag);
-  wrap.addEventListener('pointercancel',endDrag);
-  ov.querySelector('#ocCancel').addEventListener('click',function(){ov.remove();onCancel()});
-  okBtn.addEventListener('click',function(){if(!rect)return;stateTxt.textContent='讀取中… 正在擷取你框選的圖片，請稍候';okBtn.textContent='讀取中…';okBtn.disabled=true;go.click()});
-  go.addEventListener('click',function(){
-    if(!rect)return;
-    var im=new Image();
-    im.onload=function(){
-      var sx=rect.x0*im.width,sy=rect.y0*im.height,sw=(rect.x1-rect.x0)*im.width,sh=(rect.y1-rect.y0)*im.height;
+  wrap.addEventListener('pointerup',function(e){endDrag(e,false)});
+  wrap.addEventListener('pointercancel',function(e){endDrag(e,true)});
+  wrap.addEventListener('lostpointercapture',function(e){if(st)endDrag(e,true)});
+  ov.querySelector('#ocCancel').addEventListener('click',function(){release();ov.remove();onCancel()});
+  okBtn.addEventListener('click',function(){
+    if(busy||!ready||!valid()||st)return;
+    busy=true;clear.disabled=true;draw();okBtn.textContent='讀取中…';
+    try{
+      var sx=rect.x0*img.naturalWidth,sy=rect.y0*img.naturalHeight,sw=(rect.x1-rect.x0)*img.naturalWidth,sh=(rect.y1-rect.y0)*img.naturalHeight;
       var sc=Math.min(4,Math.max(1.5,2000/Math.max(1,sw)));
       var cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(sw*sc));cv.height=Math.max(1,Math.round(sh*sc));
-      var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';
-      cx.drawImage(im,sx,sy,sw,sh,0,0,cv.width,cv.height);
-      stateTxt.textContent='讀取中… 已擷取完成，開始辨識文字';
-      setTimeout(function(){ov.remove();onOk(cv.toDataURL('image/png'))},320);
-    };
-    im.onerror=function(){ov.remove();onOk(dataUrl)};
-    im.src=dataUrl;
+      var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(img,sx,sy,sw,sh,0,0,cv.width,cv.height);
+      var cropped=cv.toDataURL('image/png');ov.remove();onOk(cropped);
+    }catch(e){busy=false;clear.disabled=false;okBtn.textContent='確認框選並讀取';draw();stateTxt.textContent='圖片擷取失敗，請重新選取或換一張截圖。'}
   });
+  img.addEventListener('load',function(){ready=img.naturalWidth>0&&img.naturalHeight>0;stateTxt.textContent='請在圖片上拖曳框選文字。';draw()});
+  img.addEventListener('error',function(){ready=false;draw();stateTxt.textContent='圖片無法開啟，請改用 JPG、PNG 或手機截圖。'});
+  img.src=dataUrl;draw();
 }
 /* ---------- v132：從截圖讀文字（只分析，不自動填欄位） ---------- */
 var ocrShotImg='',ocrShotLast={fields:[],lines:[],raw:''};
@@ -2793,7 +2829,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v135';
+var APP_VER='v136';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
