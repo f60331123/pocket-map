@@ -446,6 +446,14 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 @media (max-width:640px){.topState{max-width:150px;overflow:hidden;text-overflow:ellipsis}}
 @keyframes pulse{50%{opacity:.35}}
 .fieldWrap{position:relative;display:block}.clrBtn{position:absolute;right:8px;top:14px;width:26px;height:26px;border:none;border-radius:50%;background:rgba(0,0,0,.08);color:#6b665a;font-size:15px;line-height:1;cursor:pointer;padding:0;z-index:2}.clrBtn:active{background:rgba(0,0,0,.18)}.clrTa{top:18px}
+/* v135: OCR buttons need their own styles; chip editor rules do not apply here. */
+#ocrShotOverlay .ceBtns{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+#ocrShotOverlay .ceBtns button{flex:1;min-width:120px;min-height:48px;padding:12px;border-radius:12px;border:2px solid var(--ink);background:#fff;color:var(--ink);font:inherit;font-size:15px;font-weight:700;cursor:pointer;line-height:1.4}
+#ocrShotOverlay .ceBtns button.primary{background:var(--ink);color:#fff}
+#ocrShotOverlay .ceBtns button:focus-visible{outline:3px solid #E9A319;outline-offset:2px}
+#ocrShotOverlay .ocrIntroActions{position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid var(--line);padding:10px 0 max(10px,env(safe-area-inset-bottom));margin-top:8px}
+#ocrShotOverlay .ocrIntroActions .ceBtns{margin-top:0;flex-direction:column}
+#ocrShotOverlay #ocrIntroStatus:empty{display:none}
 </style>
 </head>
 <body>
@@ -1901,7 +1909,7 @@ function ocrShotRender(stage,payload){
   var introLines=ocrRawLines(r.raw||lines.join('\n'));
   h+='<label class="lb" style="margin-top:12px">選擇要填入簡介的文字</label><div style="font-size:12px;text-align:left;color:var(--ink2)">可選店家特色、菜單或營業時間。勾選後可在下方修改文字。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
   introLines.forEach(function(l,i){h+='<label style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;overflow-wrap:anywhere"><input type="checkbox" data-intro-line="'+i+'" style="flex:none;margin-top:4px"><span>'+esc(l)+'</span></label>'});
-  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的簡介" placeholder="勾選上方文字，或在這裡整理簡介" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">填入簡介</button><button type="button" id="ocrIntroAppend">接在原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div>';
+  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的簡介" placeholder="勾選上方文字，或在這裡整理簡介" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
   if(r.raw)h+='<details style="margin-top:8px;text-align:left"><summary style="font-size:12px;color:var(--ink2)">看原始辨識文字</summary><div style="font-size:11.5px;color:#8A8674;white-space:pre-wrap;max-height:20vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:6px">'+esc(r.raw)+'</div></details>';
   h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
   body.innerHTML=h;
@@ -1913,7 +1921,7 @@ function ocrShotRender(stage,payload){
     if(!val){toast('先勾選文字或輸入簡介');return}
     if(!el||el.disabled){toast('這筆圖釘的簡介目前不能修改');return}
     if(!append&&el.value.trim()&&!window.confirm('要用這些文字取代原本的簡介嗎？'))return;
-    if(ocrShotFill('intro',append&&el.value.trim()?el.value.trim()+'\n'+val:val,true))body.querySelector('#ocrIntroStatus').textContent='已填入簡介，關閉讀文字視窗後記得儲存圖釘。';
+    if(ocrShotFill('intro',append&&el.value.trim()?el.value.trim()+'\n'+val:val,true)){ocrShotClose();el.scrollIntoView({block:'center'});toast('已填入簡介，請按「釘起來」儲存圖釘');}
   }
   body.querySelector('#ocrIntroFill').addEventListener('click',function(){fillIntro(false)});
   body.querySelector('#ocrIntroAppend').addEventListener('click',function(){fillIntro(true)});
@@ -2279,12 +2287,22 @@ function sharedPinCopy(p,uid,includeNote){
   return c;
 }
 function sharedCopyUpdate(d,clone,uid){
+  /* Firebase may call first with an empty local cache. Return null to fetch and retry. */
+  if(d===null)return null;
   if(!d||!d.members||d.members[uid]!==true||(d.__meta&&d.__meta.archivedAt))return;
   var pins=Array.isArray(d.pins)?d.pins:[];
   if(pins.some(function(p){return p&&(p.id===clone.id||(p.ownerUid===uid&&p.sourcePersonalId===clone.sourcePersonalId))}))return;
   d.pins=pins.concat([clone]);
   if(d.trash)delete d.trash[clone.id];
   d._t=Date.now();return d;
+}
+function sharedCopyOutcome(d,clone,uid,committed){
+  if(!d)return '找不到這張共用地圖，可能已被刪除';
+  if(!d.members||d.members[uid]!==true)return '你已不在這張共用地圖的名單內';
+  if(d.__meta&&d.__meta.archivedAt)return '這張共用地圖已封存，不能再加入';
+  var found=(Array.isArray(d.pins)?d.pins:[]).some(function(p){return p&&(p.id===clone.id||(p.ownerUid===uid&&p.sourcePersonalId===clone.sourcePersonalId))});
+  if(found)return committed?'added':'duplicate';
+  return '這次沒有完成加入，請再按一次地圖名稱重試';
 }
 $('#copyToSharedBtn').addEventListener('click',function(){
   var p=S.pins.find(function(x){return x.id===S.editing});
@@ -2312,7 +2330,12 @@ $('#copyToSharedBtn').addEventListener('click',function(){
       if(d.__meta&&d.__meta.archivedAt)throw new Error('這張共用地圖已封存');
       return ref.transaction(function(current){if(myUid()!==uid)return;return sharedCopyUpdate(current,clone,uid)},undefined,false);
     }).then(function(result){
-      status.textContent=result.committed?'已加入「'+wsDefaultRoomName(room,0)+'」，個人圖釘也已保留。':'未重複加入：這筆圖釘已存在，或地圖權限已變更。';
+      if(myUid()!==uid)throw new Error('帳號已變更，請重新開啟共用地圖確認');
+      var finalRoom=result.snapshot&&result.snapshot.val();
+      var outcome=sharedCopyOutcome(finalRoom,clone,uid,result.committed);
+      if(outcome==='added')status.textContent='已加入「'+wsDefaultRoomName(room,0)+'」，個人圖釘也已保留。';
+      else if(outcome==='duplicate')status.textContent='這筆圖釘已經在「'+wsDefaultRoomName(room,0)+'」裡，不需要再加入。請關閉視窗，再從選單切換到這張共用地圖查看。';
+      else throw new Error(outcome);
     }).catch(function(e){status.textContent='加入失敗：'+(e.message||e)}).then(function(){buttons.forEach(function(x){x.disabled=false})});
   }});
 });
@@ -2770,7 +2793,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v134';
+var APP_VER='v135';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
