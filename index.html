@@ -452,7 +452,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 #ocrShotOverlay .ceBtns button.primary{background:var(--ink);color:#fff}
 #ocrShotOverlay .ceBtns button:focus-visible{outline:3px solid #E9A319;outline-offset:2px}
 #ocrShotOverlay .ocrIntroActions{position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid var(--line);padding:10px 0 max(10px,env(safe-area-inset-bottom));margin-top:8px}
-#ocrShotOverlay .ocrIntroActions .ceBtns{margin-top:0;flex-direction:column}
+#ocrShotOverlay .ocrIntroActions .ceBtns{margin-top:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 #ocrShotOverlay #ocrIntroStatus:empty{display:none}
 </style>
 </head>
@@ -1802,9 +1802,33 @@ function openOcrCrop(dataUrl,onOk,onCancel){
   img.src=dataUrl;draw();
 }
 /* ---------- v132：從截圖讀文字（只分析，不自動填欄位） ---------- */
+var OCR_LANG_OPTIONS=[['chi_tra','繁體中文'],['eng','英文'],['jpn','日文'],['chi_sim','簡體中文'],['kor','韓文'],['fra','法文'],['deu','德文'],['spa','西班牙文']];
+var ocrShotLangs=['chi_tra','eng','jpn'],ocrShotRunId=0;
+try{var savedOcrLangs=JSON.parse(localStorage.getItem(KEY+'_ocrLanguages')||'null');if(Array.isArray(savedOcrLangs)){var known=OCR_LANG_OPTIONS.map(function(x){return x[0]});var valid=savedOcrLangs.filter(function(x,i,a){return known.indexOf(x)>=0&&a.indexOf(x)===i});if(valid.length)ocrShotLangs=valid}}catch(e){}
+function ocrMultilingualLines(raw){
+  var input=ocrRawLines(raw),seen=new Set(),lines=[];
+  input.forEach(function(l){
+    if(!/[\p{L}\p{N}]/u.test(l))return;
+    if(/^(?:like|comment|share|follow|log in|sign up|追蹤|傳送訊息|按讚|留言|分享|ログイン|フォロー|로그인|팔로우)$/i.test(l))return;
+    if(/^[\d,.]+\s*(?:個讚|則留言|likes?|comments?)$/i.test(l))return;
+    if(seen.has(l))return;seen.add(l);lines.push(l);
+  });
+  return {lines:lines,raw:input,dropped:input.length-lines.length};
+}
+function ocrMultilingualFields(lines){
+  var f={name:'',addr:'',phone:'',metro:''};
+  lines.forEach(function(l){
+    var n=l.match(/^(?:店名|店家|名稱|名称|店舗名|店名・名称|상호|가게명|store name|shop name|restaurant name|name)\s*[:：]\s*(.+)$/i);
+    var a=l.match(/^(?:地址|位址|住所|所在地|주소|address)\s*[:：]\s*(.+)$/i);
+    if(n&&!f.name)f.name=n[1];if(a&&!f.addr)f.addr=a[1];
+  });
+  // Keep the complete mixed-script name; do not guess an address from foreign numerals.
+  if(!f.name&&lines.length===1&&/[\p{L}]/u.test(lines[0])&&lines[0].length<=120&&!f.addr&&!/^(?:電話|tel|phone|電話番号|営業時間|營業時間|hours)\s*[:：]/i.test(lines[0])&&!/\d.*(?:號|丁目|番地)|〒/.test(lines[0]))f.name=lines[0];
+  return f;
+}
 var ocrShotImg='',ocrShotLast={fields:[],lines:[],raw:''};
-function ocrShotOpen(){var ov=$('#ocrShotOverlay');if(!ov)return;ocrShotImg='';ov.classList.remove('hide');ocrShotRender('pick')}
-function ocrShotClose(){var ov=$('#ocrShotOverlay');if(ov)ov.classList.add('hide')}
+function ocrShotOpen(){ocrShotRunId++;var ov=$('#ocrShotOverlay');if(!ov)return;ocrShotImg='';ov.classList.remove('hide');ocrShotRender('pick')}
+function ocrShotClose(){ocrShotRunId++;var ov=$('#ocrShotOverlay');if(ov)ov.classList.add('hide')}
 function ocrShotCopyFB(txt,done){
   try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();done&&done()}
   catch(e){toast('複製失敗，請手動選取')}
@@ -1843,27 +1867,32 @@ function ocrShotPasteListener(e){
   rd.readAsDataURL(f);
 }
 function ocrShotRun(src){
-  var oh=function(msg){ocrShotRender('busy',msg)};
-  oh('準備中文辨識引擎…（第一次要下載約 2MB 模型，之後就快了）');
+  var runId=++ocrShotRunId,langs=ocrShotLangs.join('+');
+  var oh=function(msg){if(runId===ocrShotRunId)ocrShotRender('busy',msg)};
+  var fail=function(msg){if(runId===ocrShotRunId)ocrShotRender('error',msg)};
+  oh('準備多語言辨識模型… 首次使用所選語言時需要下載，請稍候。');
   var lastPrep=null;
   function prep(dataUrl){return new Promise(function(res){var im=new Image();im.onload=function(){try{var cv=document.createElement('canvas'),sc=Math.min(2.2,2600/Math.max(1,im.width));cv.width=Math.round(im.width*sc);cv.height=Math.round(im.height*sc);var cx=cv.getContext('2d');cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(im,0,0,cv.width,cv.height);res(cv.toDataURL('image/png'))}catch(e){res(dataUrl)}};im.onerror=function(){res(dataUrl)};im.src=dataUrl})}
-  function recog(d){return prep(d).then(function(p){lastPrep=p;return Tesseract.recognize(p,'chi_tra',{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
+  function recog(d){return prep(d).then(function(p){lastPrep=p;return Tesseract.recognize(p,langs,{langPath:'https://tessdata.projectnaptha.com/4.0.0_fast',logger:function(m){if(m&&m.status==='recognizing text')oh('辨識中… '+Math.round((m.progress||0)*100)+'%')}})})}
   function finish(lines,raw,dropped,extra){
-    var fg={};try{fg=ocrFieldGuess(lines)||{}}catch(e){fg={}}
+    if(runId!==ocrShotRunId)return;
+    var fg={};try{fg=ocrMultilingualFields(lines)||{}}catch(e){fg={}}
     ocrOut={clean:lines.join('\n'),raw:raw,lastLbl:''};
     ocrShotRender('done',{lines:lines,dropped:dropped,raw:raw,name:fg.name||'',addr:fg.addr||'',phone:fg.phone||'',metro:fg.metro||'',extra:extra||0});
   }
   var run=function(){
     try{
       recog(src).then(function(r){
-        var raw1=(r.data&&r.data.text)||'',p1=ocrCleanLines(raw1);
+        if(runId!==ocrShotRunId)return;
+        var raw1=(r.data&&r.data.text)||'',p1=ocrMultilingualLines(raw1);
+        if(langs!=='chi_tra')return finish(p1.lines,raw1,p1.dropped,0);
         var isAddrL=function(l){return /\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l)};
         if(p1.lines.some(isAddrL)||p1.raw.join('').length>=200)return finish(p1.lines,raw1,p1.dropped,0);
         oh('畫面像白字疊照片 — 白字強化辨識中…（多花幾秒）');
         ocrInvert(lastPrep||src,function(prepUrl){
           if(!prepUrl)return finish(p1.lines,raw1,p1.dropped,0);
           recog(prepUrl).then(function(r2){
-            var p2=ocrCleanLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
+            var p2=ocrMultilingualLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
             p1.lines.forEach(function(l){seen[l.replace(/\s/g,'').toLowerCase()]=1});
             p2.lines.forEach(function(l){var k=l.replace(/\s/g,'').toLowerCase();if(seen[k])return;
               var val=(/\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l))||/09[ \-.]?\d{2}[ \-.]?\d{3}[ \-.]?\d{3}/.test(l)||/^店名：/.test(l);
@@ -1871,15 +1900,15 @@ function ocrShotRun(src){
             finish(merged,raw1+'\n=====白字強化=====\n'+((r2.data&&r2.data.text)||''),p1.dropped+p2.dropped,extra);
           }).catch(function(){finish(p1.lines,raw1,p1.dropped,0)});
         });
-      }).catch(function(e){oh('辨識失敗：'+((e&&e.message)||'未知錯誤'))});
-    }catch(e){oh('辨識引擎載入失敗，請檢查網路')}
+      }).catch(function(e){fail('辨識失敗：'+((e&&e.message)||'未知錯誤')+'。請檢查網路，或減少勾選的語言再試。')});
+    }catch(e){fail('辨識引擎載入失敗，請檢查網路')}
   };
   if(window.Tesseract)run();
   else{
     var js=document.createElement('script');
     js.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
     js.onload=run;
-    js.onerror=function(){oh('連不上辨識服務（這個網路有封鎖？）稍後再試')};
+    js.onerror=function(){fail('連不上辨識服務，請檢查網路後再試')};
     document.head.appendChild(js);
   }
 }
@@ -1897,9 +1926,15 @@ function ocrShotRender(stage,payload){
   var body=$('#ocrShotBody');if(!body)return;body.scrollTop=0;
   if(stage==='pick'){
     body.innerHTML='<div class="ceBtns" style="margin-top:0"><button type="button" class="primary" id="ocrPickFile" style="flex:1;padding:15px 0;font-size:15.5px">選截圖／拍照</button><button type="button" id="ocrPickPaste" style="flex:1;padding:15px 0;font-size:15.5px">貼上圖片</button></div>'
-      +'<div id="ocrPasteHint" style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">選好後可在圖上<b>按住拖曳框出</b>要讀的那一塊（框小一點比較準），不想框就直接讀整張。電腦可先複製圖片再按 Ctrl+V。iPhone 原況照片（HEIC）可能讀不進來，請用截圖。</div>'
-      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">讀完會<b>自動填進店名與地址欄位</b>（欄位已經有字的會保留，不會被蓋掉）。簡介可勾選文字、修改後再填入。</div>'
+      +'<fieldset style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:12px 0;text-align:left"><legend>圖片裡的語言（可複選）</legend><div style="display:flex;flex-wrap:wrap;gap:12px">'+OCR_LANG_OPTIONS.map(function(x){return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;min-height:32px"><input type="checkbox" data-ocr-lang="'+x[0]+'"'+(ocrShotLangs.indexOf(x[0])>=0?' checked':'')+'>'+x[1]+'</label>'}).join('')+'</div><p style="font-size:12px;color:var(--ink2);line-height:1.6;margin:8px 0 0">同一個店名可混合多種語言，會一起辨識並保留原文。只勾圖片裡有的語言；選越多通常越慢，也不保證更準。首次需下載所選模型。</p></fieldset>'
+      +'<div id="ocrPasteHint" style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">選好後可在圖上<b>按住拖曳框出</b>要讀的那一塊（框小一點比較準），要讀整張時，可把選取框拉到整張圖片。電腦可先複製圖片再按 Ctrl+V。iPhone 原況照片（HEIC）可能讀不進來，請用截圖。</div>'
+      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">有明確欄位標籤時會自動填入空白的店名與地址。也可勾選多行文字，修改後填入店名、地址或簡介。請確認外文字母與門牌是否正確。</div>'
       +'<textarea id="ocrPasteBox" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></textarea>';
+    body.querySelectorAll('[data-ocr-lang]').forEach(function(b){b.addEventListener('change',function(){
+      var chosen=Array.prototype.filter.call(body.querySelectorAll('[data-ocr-lang]'),function(x){return x.checked}).map(function(x){return x.getAttribute('data-ocr-lang')});
+      if(!chosen.length){b.checked=true;toast('至少選一種語言');return}
+      ocrShotLangs=chosen;try{localStorage.setItem(KEY+'_ocrLanguages',JSON.stringify(chosen))}catch(e){}
+    })});
     body.querySelector('#ocrPickFile').addEventListener('click',function(){
       var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
       inp.style.position='fixed';inp.style.left='-9999px';inp.style.width='1px';inp.style.height='1px';
@@ -1911,10 +1946,11 @@ function ocrShotRender(stage,payload){
     body.querySelector('#ocrPickPaste').addEventListener('click',ocrShotPaste);
     return;
   }
+  if(stage==='error'){body.innerHTML='<div role="alert" style="text-align:left;line-height:1.7">'+esc(payload||'辨識失敗')+'</div><div class="ceBtns"><button type="button" class="primary" id="ocrRetryPick">重新選擇語言與圖片</button></div>';body.querySelector('#ocrRetryPick').onclick=function(){ocrShotRender('pick')};return}
   if(stage==='busy'){
     body.innerHTML='<div id="ocrShotMsg" style="font-size:13.5px;line-height:1.8;text-align:left">'+esc(payload||'處理中…')+'</div>'
       +'<div style="margin-top:12px;height:8px;background:#EFEDE6;border-radius:99px;overflow:hidden"><div style="height:100%;width:14%;background:var(--ink)"></div></div>'
-      +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">第一次辨識要下載約 2MB 的中文模型，之後就快了。</div>';
+      +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">正在載入所選語言或辨識圖片。多語言首次下載較久；辨識仍在瀏覽器內進行，圖片不會送到辨識伺服器。</div>';
     return;
   }
   var r=payload||{},lines=r.lines||[];
@@ -1943,15 +1979,25 @@ function ocrShotRender(stage,payload){
   });
   h+='</div>';
   var introLines=ocrRawLines(r.raw||lines.join('\n'));
-  h+='<label class="lb" style="margin-top:12px">選擇要填入簡介的文字</label><div style="font-size:12px;text-align:left;color:var(--ink2)">可選店家特色、菜單或營業時間。勾選後可在下方修改文字。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
+  h+='<label class="lb" style="margin-top:12px">選擇要填入的文字（可勾多行）</label><div style="font-size:12px;text-align:left;color:var(--ink2)">混合語言店名可整串保留，跨行也可一起勾選。在下方確認文字，再選要填入的欄位。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
   introLines.forEach(function(l,i){h+='<label style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;overflow-wrap:anywhere"><input type="checkbox" data-intro-line="'+i+'" style="flex:none;margin-top:4px"><span>'+esc(l)+'</span></label>'});
-  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的簡介" placeholder="勾選上方文字，或在這裡整理簡介" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
+  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的文字" placeholder="勾選上方文字，或在這裡修改辨識結果" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" id="ocrSelectedName">填入店名</button><button type="button" id="ocrSelectedAddr">填入地址</button><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
   if(r.raw)h+='<details style="margin-top:8px;text-align:left"><summary style="font-size:12px;color:var(--ink2)">看原始辨識文字</summary><div style="font-size:11.5px;color:#8A8674;white-space:pre-wrap;max-height:20vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:6px">'+esc(r.raw)+'</div></details>';
   h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
   body.innerHTML=h;
   body.querySelectorAll('[data-intro-line]').forEach(function(b){b.addEventListener('change',function(){
     body.querySelector('#ocrIntroDraft').value=Array.prototype.filter.call(body.querySelectorAll('[data-intro-line]'),function(c){return c.checked}).map(function(c){return introLines[+c.getAttribute('data-intro-line')]}).join('\n');
   })});
+  function fillSelected(kind){
+    var val=body.querySelector('#ocrIntroDraft').value.trim(),label=kind==='name'?'店名':'地址',el=kind==='name'?$('#fName'):$('#fAddr');
+    if(!val){toast('先勾選或輸入要填入的文字');return}
+    if(!el||el.disabled){toast('這個欄位目前不能修改');return}
+    val=val.replace(/\s*\n\s*/g,' ');
+    if(el.value.trim()&&!window.confirm('要用選取的文字取代原本的'+label+'嗎？'))return;
+    if(ocrShotFill(kind,val,true)){ocrShotClose();el.scrollIntoView({block:'center'});toast('已填入'+label+'，請確認後儲存圖釘');}
+  }
+  body.querySelector('#ocrSelectedName').addEventListener('click',function(){fillSelected('name')});
+  body.querySelector('#ocrSelectedAddr').addEventListener('click',function(){fillSelected('addr')});
   function fillIntro(append){
     var val=body.querySelector('#ocrIntroDraft').value.trim(),el=$('#fIntro');
     if(!val){toast('先勾選文字或輸入簡介');return}
@@ -2759,11 +2805,13 @@ $('#avatarBtn').addEventListener('click',function(e){
     +'<div style="display:flex;gap:4px;align-items:stretch;margin:0"><button id="mShared" style="flex:1;width:auto">共用地圖</button><button id="mAddWs" style="width:34px;height:34px;padding:0;text-align:center;font-size:16px;line-height:1;flex:none" title="新增或加入共用地圖">＋</button></div>'
     +(roomBtns?'<div style="margin:4px 0 2px">'+roomBtns+'</div>':'')
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
+    +'<button id="mCsv">CSV 批量匯入（個人地圖）</button>'
     +'<button id="mExport">下載備份檔（可跨裝置）</button><button id="mImport">從備份檔還原</button>'
     +'<div style="height:1px;background:var(--line);margin:4px 0"></div>'
     +'<button id="mUpdate" style="font-size:12px;color:#8A8674">⬆️ 更新 App（選檔案→自動上傳）</button>';
   this.parentElement.appendChild(m);
   document.querySelector('#mExport').addEventListener('click',function(){m.remove();exportBackup()});
+  document.querySelector('#mCsv').addEventListener('click',function(){m.remove();pocketCsvUI()});
   document.querySelector('#mImport').addEventListener('click',function(){m.remove();$('#importFile').click()});
   document.querySelector('#mFb').addEventListener('click',function(){m.remove();acctUI()});
   document.querySelector('#mShared').addEventListener('click',function(){m.remove();sharedUI()});
@@ -2801,6 +2849,122 @@ function syncDiag(){
     b.innerHTML+='<br><b style="color:#C33">連不上 Google Drive'+((e&&e.auth)?'（登入過期 — 按「立即同步」會自動重登）':'（網路或權限問題）')+'</b>';
   });
 }
+/* CSV-PURE-START: fixed schema, no network and no expression evaluation. */
+function pocketCsvParse(text){
+  text=String(text||'').replace(/^\uFEFF/,'');
+  if(text.length>131072)throw new Error('檔案太大，請控制在 128 KB 以內。');
+  if(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFD]/.test(text))throw new Error('文字編碼不正確，請另存為 CSV UTF-8。');
+  var rows=[],cells=[],field='',quoted=false,closed=false,line=1,start=1;
+  function endField(){cells.push(field);field='';closed=false}
+  function endRow(){endField();if(cells.some(function(c){return c.trim()!==''}))rows.push({line:start,cells:cells});cells=[];start=line+1}
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(quoted){
+      if(c==='"'){if(text[i+1]==='"'){field+='"';i++}else{quoted=false;closed=true}}
+      else if(c==='\r'||c==='\n'){if(c==='\r'&&text[i+1]==='\n')i++;field+='\n';line++}
+      else field+=c;
+    }else if(c===','){endField()}
+    else if(c==='\r'||c==='\n'){if(c==='\r'&&text[i+1]==='\n')i++;endRow();line++}
+    else if(c==='"'){if(field||closed)throw new Error('第 '+line+' 行的引號格式不正確。');quoted=true}
+    else{if(closed)throw new Error('第 '+line+' 行的引號後只能接逗號或換行。');field+=c}
+  }
+  if(quoted)throw new Error('第 '+start+' 行開始的引號沒有結束。');
+  if(field||cells.length||closed)endRow();
+  if(!rows.length)throw new Error('檔案沒有內容。');
+  if(JSON.stringify(rows[0].cells.map(function(c){return c.trim()}))!==JSON.stringify(['店名','地址','簡介']))throw new Error('第一列必須依序為：店名、地址、簡介。請使用範本。');
+  rows.shift();
+  if(!rows.length)throw new Error('範本內尚未填入店家。');
+  if(rows.length>20)throw new Error('每次最多 20 筆，目前有 '+rows.length+' 筆，請拆成多個檔案。');
+  return rows;
+}
+function pocketCsvKey(name,addr){
+  function norm(s){return String(s||'').normalize('NFKC').replace(/臺/g,'台').replace(/\s+/g,'').toLowerCase()}
+  return JSON.stringify([norm(name),norm(addr)]);
+}
+function pocketCsvPreview(rows,pins){
+  var seen=new Set((pins||[]).map(function(p){return pocketCsvKey(p.name,p.addr)}));
+  var items=rows.map(function(row){
+    var c=row.cells.map(function(v){return v.trim()}),error='';
+    if(c.length!==3)error='需要剛好 3 欄，目前有 '+c.length+' 欄';
+    else if(!c[0]||!c[1])error='店名和地址都必填';
+    else if(c[0].length>200||c[1].length>500||c[2].length>5000)error='文字過長（店名 200、地址 500、簡介 5000 字以內）';
+    var key=pocketCsvKey(c[0],c[1]),duplicate=!error&&seen.has(key);
+    if(!error)seen.add(key);
+    return {line:row.line,name:c[0]||'',addr:c[1]||'',intro:c[2]||'',error:error,duplicate:duplicate};
+  });
+  return {items:items,errors:items.filter(function(x){return x.error}),add:items.filter(function(x){return !x.error&&!x.duplicate}),skipped:items.filter(function(x){return x.duplicate}).length};
+}
+/* CSV-PURE-END */
+function pocketCsvCommit(rows,scope,uid){
+  if(isSharedMode()||localScopeKey()!==scope||myUid()!==uid)throw new Error('帳號或地圖已變更，請關閉後重新匯入。');
+  var plan=pocketCsvPreview(rows,S.pins);
+  if(plan.errors.length)throw new Error('資料仍有錯誤，尚未匯入任何圖釘。');
+  if(!plan.add.length)return {count:0,skipped:plan.skipped};
+  var now=Date.now(),next=now,used=new Set(S.pins.map(function(p){return p.id}));
+  Object.keys(S.trash||{}).forEach(function(k){used.add(+k)});
+  var additions=plan.add.map(function(p){
+    while(used.has(next))next++;var id=next++;used.add(id);
+    return {id:id,created:now,updated:now,name:p.name,addr:p.addr,intro:p.intro,url:'',cat:'na',folder:'',status:'todo',rating:0,note:'',price:'',pages:[],pub:false,lat:null,lng:null,ownerUid:uid};
+  });
+  var combined=S.pins.concat(additions),data=stateData();data.pins=combined;
+  // One atomic localStorage write before changing the in-memory list or syncing.
+  try{localStorage.setItem(scope,JSON.stringify(data))}catch(e){throw new Error('手機儲存空間不足或無法儲存，這次沒有加入任何圖釘。')}
+  S.pins=combined;
+  try{scopedSet('_savedAt',String(now))}catch(e){}
+  try{if(typeof queuePush==='function')queuePush();if(FB.ready&&!FB.applying)fbPush()}catch(e){toast('圖釘已存到這台裝置，雲端同步請稍後重試')}
+  return {count:additions.length,skipped:plan.skipped};
+}
+function pocketCsvUI(){
+  if(isSharedMode()){toast('CSV 目前只支援個人地圖，請先從選單切回個人地圖。');return}
+  var ov=document.createElement('div');ov.id='chipEditOverlay';
+  var scope=localScopeKey(),uid=myUid(),rows=null,reading=0,done=false,busy=false;
+  ov.innerHTML='<div class="ceCard" style="max-width:580px;text-align:left"><h4>CSV 批量匯入</h4><p style="font-size:13px;line-height:1.7">每列一間店，固定三欄：<b>店名、地址、簡介</b>。店名、地址必填，簡介可空白。最多 20 筆，請另存為 <b>CSV UTF-8（逗號分隔）</b>。</p><div class="ceBtns"><button type="button" id="csvTemplate">下載空白範本</button><button type="button" id="csvChoose">選擇 CSV 檔</button></div><input type="file" id="csvFile" accept=".csv,text/csv" style="display:none"><p style="font-size:12px;line-height:1.7">匯入到個人地圖，分類為「未分類」、狀態為「還沒去」。先儲存資料，不自動定位；之後可在清單補位置。相同店名＋地址會跳過，不覆蓋舊資料。</p><div id="csvMessage" role="status" style="white-space:pre-wrap;font-size:13px;line-height:1.7"></div><div id="csvPreview" style="max-height:38vh;overflow:auto;overflow-wrap:anywhere"></div><div class="ceBtns"><button type="button" id="csvClose">取消</button><button type="button" class="primary" id="csvConfirm" disabled>確認匯入</button></div></div>';
+  document.body.appendChild(ov);
+  var q=function(s){return ov.querySelector(s)},msg=q('#csvMessage'),preview=q('#csvPreview'),confirm=q('#csvConfirm'),file=q('#csvFile');
+  function active(){return ov.isConnected&&localScopeKey()===scope&&myUid()===uid&&!isSharedMode()}
+  function render(){
+    if(!rows)return;
+    var p=pocketCsvPreview(rows,S.pins);
+    msg.textContent=p.errors.length?'有 '+p.errors.length+' 筆錯誤，請修改 CSV 後重新選檔；目前沒有加入任何資料。':'可新增 '+p.add.length+' 筆，重複跳過 '+p.skipped+' 筆。請確認以下資料。';
+    preview.innerHTML=p.items.map(function(x){return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;font-size:13px"><b>第 '+x.line+' 行 · '+esc(x.name||'（缺店名）')+'</b><div>'+esc(x.addr||'（缺地址）')+'</div>'+(x.intro?'<div style="white-space:pre-wrap;color:var(--ink2)">'+esc(x.intro)+'</div>':'')+'<div style="margin-top:4px;color:'+(x.error?'#B3351E':x.duplicate?'#856000':'#1F7A6B')+'">'+esc(x.error||(x.duplicate?'重複，將跳過':'待匯入 · 待定位'))+'</div></div>'}).join('');
+    confirm.disabled=!!p.errors.length||!p.add.length;confirm.textContent='確認加入 '+p.add.length+' 筆';
+    return p;
+  }
+  q('#csvTemplate').onclick=function(){
+    var a=document.createElement('a'),url=URL.createObjectURL(new Blob(['\uFEFF店名,地址,簡介\r\n'],{type:'text/csv;charset=utf-8'}));
+    a.href=url;a.download='pocket-map-import-template.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},60000);
+  };
+  q('#csvChoose').onclick=function(){if(busy||done)return;file.value='';file.click()};
+  q('#csvClose').onclick=function(){reading++;ov.remove()};
+  file.onchange=function(){
+    var f=file.files&&file.files[0];if(!f)return;
+    var ticket=++reading;rows=null;confirm.disabled=true;preview.innerHTML='';
+    if(!/\.csv$/i.test(f.name)){msg.textContent='只接受 .csv 檔，Excel 活頁簿請先另存為 CSV UTF-8。';return}
+    if(f.size>131072){msg.textContent='檔案超過 128 KB，請拆成較小檔案。';return}
+    msg.textContent='正在檢查檔案…';
+    f.arrayBuffer().then(function(buffer){
+      if(ticket!==reading||!ov.isConnected)return;
+      if(!active())throw new Error('帳號或地圖已變更，請重新開啟匯入。');
+      var text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(buffer)}catch(e){throw new Error('檔案不是有效的 UTF-8，請另存為 CSV UTF-8。')}
+      rows=pocketCsvParse(text);render();
+    }).catch(function(e){if(ticket===reading&&ov.isConnected){rows=null;confirm.disabled=true;msg.textContent=e.message||'檔案讀取失敗，請重新選檔。'}});
+  };
+  confirm.onclick=function(){
+    if(done||busy||!rows||confirm.disabled)return;
+    if(!active()){confirm.disabled=true;msg.textContent='帳號或地圖已變更，請關閉後重新匯入。';return}
+    var p=pocketCsvPreview(rows,S.pins),expected=confirm.textContent;
+    if(p.errors.length||!p.add.length||expected!=='確認加入 '+p.add.length+' 筆'){render();return}
+    busy=true;confirm.disabled=true;
+    try{
+      var result=pocketCsvCommit(rows,scope,uid);done=true;rows=null;reading++;
+      q('#csvChoose').disabled=true;file.disabled=true;confirm.textContent='已匯入';q('#csvClose').textContent='完成';
+      msg.textContent='已加入個人地圖 '+result.count+' 筆，跳過 '+result.skipped+' 筆重複。新增圖釘尚未定位，可在清單補位置。';preview.innerHTML='';
+      try{renderAll()}catch(e){}toast('已匯入 '+result.count+' 筆，待補位置');
+    }catch(e){msg.textContent=e.message||'匯入失敗。';confirm.disabled=false}
+    busy=false;
+  };
+}
+
 function exportBackup(){
   var d=new Date(),pad=function(n){return (n<10?'0':'')+n};
   var name='口袋地圖備份-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json';
@@ -2829,7 +2993,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v136';
+var APP_VER='v138';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
