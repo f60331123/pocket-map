@@ -1815,6 +1815,10 @@ function ocrMultilingualLines(raw){
   });
   return {lines:lines,raw:input,dropped:input.length-lines.length};
 }
+function ocrIncompleteAddress(line){
+  var compact=String(line||'').replace(/\s+/g,'');
+  return /(?:路|街|大道|巷|弄)/.test(compact)&&!/[號号]/.test(compact)&&/(?:路|街|段|巷|弄)[0-9０-９之-]*$/.test(compact);
+}
 function ocrMultilingualFields(lines){
   var f={name:'',addr:'',phone:'',metro:''};
   lines.forEach(function(l){
@@ -1885,11 +1889,13 @@ function ocrShotRun(src){
       recog(src).then(function(r){
         if(runId!==ocrShotRunId)return;
         var raw1=(r.data&&r.data.text)||'',p1=ocrMultilingualLines(raw1);
-        if(langs!=='chi_tra')return finish(p1.lines,raw1,p1.dropped,0);
+        var incomplete=p1.lines.some(ocrIncompleteAddress);
+        if(langs!=='chi_tra'&&!incomplete)return finish(p1.lines,raw1,p1.dropped,0);
         var isAddrL=function(l){return /\d{1,4}之?\d*號/.test(l)&&/(路|街|道|巷|弄|段)/.test(l)};
-        if(p1.lines.some(isAddrL)||p1.raw.join('').length>=200)return finish(p1.lines,raw1,p1.dropped,0);
+        if(!incomplete&&(p1.lines.some(isAddrL)||p1.raw.join('').length>=200))return finish(p1.lines,raw1,p1.dropped,0);
         oh('畫面像白字疊照片 — 白字強化辨識中…（多花幾秒）');
         ocrInvert(lastPrep||src,function(prepUrl){
+          if(runId!==ocrShotRunId)return;
           if(!prepUrl)return finish(p1.lines,raw1,p1.dropped,0);
           recog(prepUrl).then(function(r2){
             var p2=ocrMultilingualLines((r2.data&&r2.data.text)||''),seen={},merged=p1.lines.slice(),extra=0;
@@ -1961,6 +1967,7 @@ function ocrShotRender(stage,payload){
   if(fN||fA){autoMsg='<div style="font-size:12.5px;color:#2E7D32;text-align:left;line-height:1.6;margin-bottom:6px">✅ 已自動填進欄位：'+((fN?'店名':'')+(fN&&fA?'、':'')+(fA?'地址':''))+'（可以自己改；欄位原本就有字的沒被覆蓋）</div>';}
   else if(r.name||r.addr){autoMsg='<div style="font-size:12.5px;color:#B26A00;text-align:left;line-height:1.6;margin-bottom:6px">欄位裡已經有字，沒有覆蓋。要換成讀到的內容，按右邊的「填入」。</div>';}
   var h=autoMsg+'<div style="font-size:13px;color:var(--ink2);text-align:left;line-height:1.7">讀到 <b>'+lines.length+'</b> 行文字'+(r.dropped?('（已濾掉 '+r.dropped+' 行雜訊）'):'')+'。要哪一行按「複製」，或按「填入」直接進欄位。</div>';
+  if(lines.some(ocrIncompleteAddress)){h+='<div role="status" style="font-size:13px;color:#B26A00;text-align:left;margin-top:8px">地址可能未讀完整：請核對巷、弄後的門牌號碼。可重新框選完整地址並留一點邊距，或手動修正後再填入。</div>';}
   if(fields.length){
     h+='<label class="lb" style="margin-top:10px">認出來的欄位</label>';
     fields.forEach(function(f){
@@ -2993,7 +3000,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v138';
+var APP_VER='v139';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
