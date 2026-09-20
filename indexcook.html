@@ -19,6 +19,7 @@
   --seal:#B8442F;
   --tab-w:46px;
   --pad-x:46px;
+  --tab-mobile-w:52px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -215,16 +216,19 @@ button{font-family:inherit}
 
 /* ============ 書籤帶 ============ */
 .ribbon{
-  position:absolute;top:-3px;right:88px;width:42px;height:96px;z-index:6;
+  position:absolute;top:-3px;right:88px;width:44px;height:106px;z-index:6;
   background:linear-gradient(to bottom, #C4452F, #A93A28);
   color:#FBF3E4;border:none;cursor:pointer;
-  writing-mode:vertical-rl;font:700 14px 'Noto Serif TC',serif;letter-spacing:.35em;
-  padding:12px 0 18px;text-align:start;
+  /* 直排書籤：nowrap 讓字永遠不會被擠成兩欄，高度留足 */
+  writing-mode:vertical-rl;text-orientation:upright;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;
+  font:700 14px/1 'Noto Serif TC',serif;letter-spacing:.28em;text-indent:.28em;
+  padding:14px 0 26px;
   clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 13px),0 100%);
   box-shadow:0 4px 10px -2px rgba(0,0,0,.4);
   transition:height .18s ease;
 }
-.ribbon:hover{height:108px}
+.ribbon:hover{height:118px}
 .ribbon.hide{display:none}
 
 /* ============ 右側分頁 ============ */
@@ -280,33 +284,135 @@ button{font-family:inherit}
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ============ 手機 ============ */
-@media (max-width:720px){
-  :root{--pad-x:20px;--tab-w:34px}
-  .desk{padding:0}
-  .book{width:100%;height:100dvh;min-height:0;border-radius:0;box-shadow:none}
-  .book::before,.book::after{display:none}
-  .book-head{flex-wrap:wrap;row-gap:10px;padding:14px 100px 10px 18px}
-  .head-actions{flex:1 1 100%}
-  .seal{width:36px;height:36px;font:900 19px/36px 'Noto Serif TC',serif}
-  .head-text h1{font-size:17px}
-  .search{width:110px;padding:7px 11px;font-size:12.5px}
-  .head-actions .ghost{padding:6px 9px;font-size:11px}
-  .sheet{padding:18px 20px 56px 18px}
-  .ch-title{font-size:21px}
-  .grid{grid-template-columns:1fr 1fr;gap:12px}
-  .card-b{padding:10px 11px 11px}
-  .card-b h3{font-size:13.5px;min-height:2.6em}
-  .card .ing-preview{display:none}
-  .dt-title{font-size:24px}
-  .dt-cols{grid-template-columns:1fr;gap:24px}
-  .dt-img{max-height:300px}
-  .ribbon{right:52px;width:36px;height:80px;font-size:12.5px}
-  .tabs{top:96px;right:calc(var(--tab-w) * -1 + 6px);gap:6px;max-height:calc(100% - 200px)}
-  .tab{font-size:11px;padding:9px 0 7px;letter-spacing:.2em}
-  .tab .delx{width:15px;height:15px;font-size:10px;line-height:15px}
+/* ============ 漢堡選單（手機頂列） ============ */
+.menu-wrap{position:relative;display:none}
+.menu-btn{
+  width:36px;height:36px;border-radius:8px;
+  border:1px solid var(--line);background:var(--paper-2);
+  cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;
+  padding:0;
 }
-@media (max-width:380px){.grid{grid-template-columns:1fr}}
+.menu-btn i{display:block;width:16px;height:2px;background:var(--ink);border-radius:2px}
+.menu-pop{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:20;
+  background:var(--paper-2);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 8px 22px -6px rgba(0,0,0,.35);
+  padding:6px;min-width:140px;display:none;
+}
+.menu-pop.on{display:block}
+.menu-pop button{
+  display:block;width:100%;text-align:left;
+  padding:9px 12px;border:none;background:none;cursor:pointer;
+  font:inherit;font-size:13.5px;color:var(--ink);border-radius:6px;
+}
+.menu-pop button:hover{background:rgba(58,51,43,.06)}
+
+/* ============ 手機（分頁貼右邊緣、書本讓位） ============ */
+@media (max-width:720px){
+  :root{--pad-x:16px;--tab-mobile-w:44px}
+  .desk{padding:0}
+  .book{
+    width:100%;height:100dvh;min-height:0;border-radius:0;box-shadow:none;
+    padding-right:var(--tab-mobile-w); /* 讓出右邊給分頁 */
+  }
+  .book::before,.book::after{display:none}
+
+  /* 頂列：印章 + 標題 + 搜尋 + ☰，單行 */
+  .book-head{
+    flex-wrap:nowrap;gap:8px;
+    padding:10px calc(var(--tab-mobile-w) + 6px) 8px var(--pad-x);
+    border-bottom:2px double var(--line);
+  }
+  .seal{width:32px;height:32px;font:900 17px/32px 'Noto Serif TC',serif}
+  .head-text h1{font-size:15.5px;letter-spacing:.04em}
+  .head-text .stat{font-size:11px;margin-top:1px}
+  .head-actions{gap:6px;flex:none}
+  .search{width:clamp(64px,26vw,128px);min-width:0;padding:6px 10px;font-size:12px}
+  .head-actions .ghost{display:none} /* 桌機的備份/匯入按鈕在手機隱藏 */
+  .menu-wrap{display:block}          /* 手機顯示漢堡 */
+
+  /* 內頁：縮 padding 讓兩欄卡片剛好一頁看完 */
+  .sheet{padding:14px calc(var(--tab-mobile-w) + 10px) 40px var(--pad-x)}
+  .ch-head{margin-bottom:12px}
+  .ch-title{font-size:19px}
+  .ch-sub{font-size:11px;margin-top:2px}
+  .grid{grid-template-columns:1fr 1fr;gap:10px}
+  .card .ph{aspect-ratio:1/1}
+  .card-b{padding:8px 10px 10px}
+  .card-b h3{font-size:13px;min-height:2.4em}
+  .card .ing-preview{display:none}
+  .card-meta{gap:6px;margin-top:6px}
+  .cat-chip{font-size:10.5px}
+  .hearts{font-size:11.5px}
+
+  .dt-title{font-size:22px}
+  .dt-cols{grid-template-columns:1fr;gap:22px}
+  .dt-img{max-height:260px}
+
+  /* 紅書籤帶保留 */
+  .ribbon{right:4px;width:36px;height:68px;font-size:12px;letter-spacing:.2em;text-indent:.2em;padding:10px 0 14px}
+
+  /* ★ 右側分頁：改成貼畫面右邊緣的橫排標籤（活頁分隔紙風）★ */
+  .tabs{
+    position:fixed;top:78px;right:0;bottom:0;
+    width:var(--tab-mobile-w);
+    padding:0 0 12px 0;
+    display:flex;flex-direction:column;gap:4px;
+    align-items:stretch;justify-content:flex-start;
+    max-height:none;overflow-y:auto;
+    background:transparent;z-index:8;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    writing-mode:horizontal-tb;              /* 改回橫排 */
+    min-width:0;max-width:none;width:100%;
+    padding:10px 4px 10px 8px;
+    font:600 11px/1.15 'Noto Sans TC',sans-serif;
+    letter-spacing:.02em;
+    color:#fff;
+    background:var(--c,#8A8172);
+    border-radius:8px 0 0 8px;               /* 只有左邊圓，貼齊右邊緣 */
+    transform:translateX(6px);               /* 未選中稍微縮進，露出書頁 */
+    box-shadow:-2px 2px 5px -1px rgba(0,0,0,.25);
+    max-height:none;overflow:visible;
+    text-align:center;
+    word-break:break-all;
+    display:flex;align-items:center;justify-content:center;
+    min-height:38px;
+  }
+  .tab:hover{transform:translateX(0)}
+  .tab.on{
+    transform:translateX(0);font-weight:700;
+    box-shadow:-3px 2px 8px -1px rgba(0,0,0,.4);
+    /* 選中的分頁凸出來一點：延伸到左邊 */
+    padding-left:10px;
+  }
+  .tab .delx{
+    position:absolute;top:2px;right:2px;left:auto;
+    writing-mode:horizontal-tb;
+    width:16px;height:16px;font-size:11px;line-height:16px;
+    background:rgba(0,0,0,.35);
+  }
+  .tab-add{
+    background:transparent;color:var(--ink-soft);
+    border:1.5px dashed #A99C82;border-right:none;
+    border-radius:8px 0 0 8px;
+    font-size:15px;font-weight:400;
+    min-height:34px;
+  }
+  .tab-add:hover{transform:translateX(0);color:var(--ink)}
+}
+@media (max-width:400px){
+  .head-text .stat{font-size:10.5px;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+@media (max-width:340px){
+  :root{--tab-mobile-w:40px}
+  .grid{grid-template-columns:1fr}
+  .search{width:74px}
+  .ribbon{width:34px;height:64px;font-size:11.5px}
+  .ribbon{width:34px;height:94px;font-size:12.5px}
+}
 </style>
 </head>
 <body>
@@ -323,6 +429,13 @@ button{font-family:inherit}
           <input class="search" id="q" placeholder="搜尋食譜、食材" autocomplete="off">
           <button class="ghost" id="btnExport">備份</button>
           <button class="ghost" id="btnImport">匯入</button>
+          <div class="menu-wrap">
+            <button class="menu-btn" id="btnMenu" aria-label="更多"><i></i><i></i><i></i></button>
+            <div class="menu-pop" id="menuPop">
+              <button data-menu="export">備份 JSON</button>
+              <button data-menu="import">匯入 JSON</button>
+            </div>
+          </div>
         </div>
       </header>
       <main class="sheet" id="sheet"></main>
@@ -343,6 +456,7 @@ const KEY='cookbook_v1';
 const CB_VER='v1';
 const PALETTE=['#C96A4A','#D99A3D','#7C9A5E','#5E8C8A','#8A6A9E','#B05A7E','#B98A5A','#7A5A44','#4E7A5A','#A05A4A'];
 const $=s=>document.querySelector(s);
+if(window.matchMedia&&window.matchMedia('(max-width:720px)').matches){const _q=document.getElementById('q');if(_q)_q.placeholder='搜尋';}
 
 let S=load();
 let UI={cat:'__all',view:{t:'list'},q:'',manage:false,img:'',hr:0};
@@ -689,10 +803,26 @@ $('#importPick').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 
+/* ================= 漢堡選單（手機） ================= */
+$('#btnMenu').addEventListener('click',e=>{
+  e.stopPropagation();
+  $('#menuPop').classList.toggle('on');
+});
+$('#menuPop').addEventListener('click',e=>{
+  const b=e.target.closest('[data-menu]');if(!b)return;
+  $('#menuPop').classList.remove('on');
+  if(b.dataset.menu==='export')$('#btnExport').click();
+  else if(b.dataset.menu==='import')$('#btnImport').click();
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.menu-wrap'))$('#menuPop').classList.remove('on');
+});
+
 /* ================= 啟動 ================= */
 function render(){renderTabs();renderSheet();}
 render();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
