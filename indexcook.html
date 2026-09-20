@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2B2723">
+<title>我的食譜本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#2B2723;
+  --paper:#F7F1E3;
+  --paper-2:#FFFDF6;
+  --ink:#3A332B;
+  --ink-soft:#7A6F5E;
+  --line:#E4D8C0;
+  --seal:#B8442F;
+  --tab-w:46px;
+  --pad-x:46px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Noto Sans TC',system-ui,sans-serif;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.05), transparent 60%),
+    radial-gradient(120% 120% at 50% 110%, rgba(0,0,0,.35), transparent 60%),
+    var(--desk);
+  color:var(--ink);
+}
+.desk{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+
+/* ============ 書本 ============ */
+.book{
+  position:relative;
+  width:min(960px,100%);
+  height:min(880px,calc(100vh - 56px));
+  min-height:520px;
+  background:var(--paper);
+  border-radius:6px 14px 14px 6px;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.04) inset,
+    0 30px 60px -18px rgba(0,0,0,.65),
+    0 8px 20px rgba(0,0,0,.35);
+}
+/* 書脊 + 內頁堆疊感 */
+.book::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:22px;z-index:3;pointer-events:none;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 5px, rgba(58,51,43,.05) 5px 6px),
+    linear-gradient(to right, rgba(58,51,43,.28), rgba(58,51,43,.07) 40%, transparent);
+  border-radius:6px 0 0 6px;
+}
+.book::after{
+  content:"";position:absolute;left:22px;top:0;bottom:0;width:14px;z-index:2;pointer-events:none;
+  background:linear-gradient(to right, rgba(58,51,43,.07), transparent);
+}
+.page{position:absolute;inset:0;border-radius:inherit;overflow:hidden;display:flex;flex-direction:column;z-index:1}
+
+/* ============ 書首 ============ */
+.book-head{
+  display:flex;align-items:center;gap:14px;
+  padding:24px calc(var(--pad-x) + 118px) 14px calc(var(--pad-x) + 14px);
+  border-bottom:3px double var(--line);
+  flex:none;
+}
+.seal{
+  width:44px;height:44px;flex:none;border-radius:7px;
+  background:var(--seal);color:#FBF3E4;
+  font:900 24px/44px 'Noto Serif TC',serif;text-align:center;
+  box-shadow:0 2px 6px rgba(184,68,47,.35);
+  transform:rotate(-3deg);
+}
+.head-text{flex:1;min-width:0}
+.head-text h1{font:900 22px/1.2 'Noto Serif TC',serif;letter-spacing:.06em}
+.head-text .stat{font-size:12px;color:var(--ink-soft);margin-top:3px;letter-spacing:.05em}
+.head-actions{display:flex;gap:8px;align-items:center}
+.search{
+  width:190px;padding:8px 14px;border-radius:999px;
+  border:1px solid var(--line);background:var(--paper-2);
+  font:inherit;font-size:13px;color:var(--ink);outline:none;
+}
+.search:focus{border-color:#C9B98F}
+.search::placeholder{color:#B3A78F}
+
+/* ============ 內頁 ============ */
+.sheet{flex:1;overflow-y:auto;padding:24px var(--pad-x) 64px calc(var(--pad-x) + 14px);scrollbar-width:thin}
+.sheet-in{animation:turn .38s ease both}
+@keyframes turn{
+  from{transform:perspective(1400px) rotateY(-7deg);transform-origin:left center;opacity:.3}
+  to{transform:none;opacity:1}
+}
+@media (prefers-reduced-motion:reduce){.sheet-in{animation:none}}
+
+.ch-head{display:flex;align-items:flex-end;gap:12px;margin-bottom:18px}
+.ch-head .grow{flex:1;min-width:0}
+.ch-title{font:900 26px/1.2 'Noto Serif TC',serif;letter-spacing:.04em}
+.ch-sub{font-size:12px;color:var(--ink-soft);margin-top:4px;letter-spacing:.05em}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:18px}
+.card{
+  background:var(--paper-2);border:1px solid var(--line);border-radius:10px;
+  overflow:hidden;cursor:pointer;
+  box-shadow:0 1px 2px rgba(58,51,43,.06);
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 22px -10px rgba(58,51,43,.35)}
+.card .ph{aspect-ratio:4/3;background:#EFE7D2;position:relative}
+.card .ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-fallback{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--c,#B99F6C);opacity:.55;
+  background:
+    repeating-linear-gradient(45deg, rgba(58,51,43,.025) 0 8px, transparent 8px 16px),
+    #F1EADA;
+}
+.ph-fallback svg{width:52px;height:52px}
+.card-b{padding:12px 14px 13px}
+.card-b h3{
+  font:700 15.5px/1.35 'Noto Serif TC',serif;letter-spacing:.02em;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:2.7em;
+}
+.card .ing-preview{
+  font-size:12px;color:var(--ink-soft);margin-top:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.card-meta{display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap}
+.cat-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft)}
+.cat-chip i{width:9px;height:9px;border-radius:50%;flex:none}
+.hearts{font-size:12.5px;color:#C4452F;letter-spacing:1px}
+.hearts .off{color:#D8CBAF}
+
+/* ============ 印章 ============ */
+.stamp{
+  display:inline-block;border:2px solid var(--seal);color:var(--seal);
+  border-radius:6px;padding:2px 9px;
+  font:700 12px/1.5 'Noto Serif TC',serif;letter-spacing:.15em;
+  transform:rotate(-4deg);background:rgba(184,68,47,.04);
+}
+button.stamp{cursor:pointer}
+button.stamp.off{opacity:.32;border-style:dashed;transform:none}
+
+/* ============ 詳細頁 ============ */
+.dt-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+.dt-act{display:flex;gap:8px}
+.dt-title{font:900 30px/1.25 'Noto Serif TC',serif;letter-spacing:.03em}
+.dt-meta{display:flex;align-items:center;gap:14px;margin:12px 0 20px;flex-wrap:wrap}
+.dt-img{width:100%;max-height:430px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:22px}
+.dt-cols{display:grid;grid-template-columns:5fr 7fr;gap:30px}
+.dt h4{
+  font:700 14px/1 'Noto Serif TC',serif;letter-spacing:.2em;color:var(--ink);
+  padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:12px;
+}
+.dt ul{list-style:none}
+.dt ul li{position:relative;padding:4px 0 4px 18px;font-size:14.5px;line-height:1.6}
+.dt ul li::before{content:"";position:absolute;left:2px;top:.85em;width:7px;height:7px;border-radius:50%;background:#C9B98F}
+.dt ol{list-style:none;counter-reset:st}
+.dt ol li{
+  counter-increment:st;position:relative;padding:6px 0 6px 34px;
+  font-size:14.5px;line-height:1.7;
+}
+.dt ol li::before{
+  content:counter(st,decimal-leading-zero);
+  position:absolute;left:0;top:7px;
+  font:700 12px/1 'Noto Serif TC',serif;color:var(--seal);letter-spacing:.05em;
+}
+.note-block{margin-top:26px}
+.note-block p{font-size:14.5px;line-height:1.8;color:#544A3C;white-space:pre-wrap}
+.src-line{margin-top:24px;font-size:13px;color:var(--ink-soft)}
+.src-line a{color:#8A6A2F;text-decoration:underline;text-underline-offset:3px;word-break:break-all}
+.dt-empty{margin-top:26px;padding:22px;border:1.5px dashed var(--line);border-radius:10px;text-align:center;color:var(--ink-soft);font-size:13.5px}
+
+/* ============ 表單 ============ */
+.fm h2{font:900 24px/1.2 'Noto Serif TC',serif;margin-bottom:20px;letter-spacing:.04em}
+.fm label{display:block;margin-bottom:16px}
+.fm label>span.lb{display:block;font:700 13px/1 'Noto Serif TC',serif;letter-spacing:.15em;margin-bottom:7px}
+.fm label>span.hint{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-left:8px;letter-spacing:.02em}
+.fm input[type=text],.fm input[type=url],.fm textarea,.fm select{
+  width:100%;padding:10px 13px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper-2);font:inherit;font-size:14px;color:var(--ink);outline:none;
+}
+.fm textarea{resize:vertical;line-height:1.7}
+.fm input:focus,.fm textarea:focus,.fm select:focus{border-color:#C9B98F}
+.fm ::placeholder{color:#BCB094}
+.imgpick{border:1.5px dashed #D5C7A6;border-radius:10px;background:var(--paper-2);padding:12px;display:flex;gap:12px;align-items:center}
+.imgpick .prev{width:110px;height:82px;border-radius:7px;object-fit:cover;background:#EFE7D2;flex:none;display:block}
+.imgpick .noimg{width:110px;height:82px;border-radius:7px;background:#F1EADA;flex:none;display:flex;align-items:center;justify-content:center;color:#B3A78F}
+.imgpick .ops{display:flex;flex-direction:column;gap:7px}
+.frow{display:flex;align-items:center;gap:4px;margin-bottom:16px}
+.frow>span.lb{font:700 13px/1 'Noto Serif TC',serif;letter-spacing:.15em;margin-right:10px}
+.hr-btn{font-size:21px;background:none;border:none;cursor:pointer;color:#C4452F;padding:0 3px;line-height:1}
+.hr-btn .off{color:#D8CBAF}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.chk input{width:17px;height:17px;accent-color:var(--seal)}
+
+/* ============ 按鈕 ============ */
+button{font-family:inherit}
+.ghost{
+  padding:7px 14px;border-radius:8px;border:1px solid var(--line);
+  background:var(--paper-2);color:var(--ink);font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.ghost:hover{border-color:#C9B98F}
+.ghost.sm{padding:5px 11px;font-size:12px}
+.primary{
+  width:100%;padding:13px;border:none;border-radius:9px;cursor:pointer;
+  background:var(--seal);color:#FBF3E4;font:700 15px/1 'Noto Serif TC',serif;letter-spacing:.25em;
+  box-shadow:0 4px 12px -4px rgba(184,68,47,.5);
+}
+.primary:hover{filter:brightness(1.06)}
+.danger{border-color:#E0B9AE;color:var(--seal)}
+.danger:hover{border-color:var(--seal)}
+
+/* ============ 書籤帶 ============ */
+.ribbon{
+  position:absolute;top:-3px;right:88px;width:42px;height:96px;z-index:6;
+  background:linear-gradient(to bottom, #C4452F, #A93A28);
+  color:#FBF3E4;border:none;cursor:pointer;
+  writing-mode:vertical-rl;font:700 14px 'Noto Serif TC',serif;letter-spacing:.35em;
+  padding:12px 0 18px;text-align:start;
+  clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 13px),0 100%);
+  box-shadow:0 4px 10px -2px rgba(0,0,0,.4);
+  transition:height .18s ease;
+}
+.ribbon:hover{height:108px}
+.ribbon.hide{display:none}
+
+/* ============ 右側分頁 ============ */
+.tabs{
+  position:absolute;top:64px;right:calc(var(--tab-w) * -1 + 8px);z-index:7;
+  display:flex;flex-direction:column;gap:7px;align-items:flex-end;
+  max-height:calc(100% - 128px);
+}
+.tab{
+  min-width:var(--tab-w);max-width:var(--tab-w);
+  padding:11px 0 9px;
+  border:none;cursor:pointer;
+  writing-mode:vertical-rl;
+  font:500 13px 'Noto Sans TC',sans-serif;letter-spacing:.28em;
+  color:#FBF6EA;background:var(--c,#8A8172);
+  border-radius:0 9px 9px 0;
+  transform:translateX(14px);
+  transition:transform .16s ease, filter .16s ease;
+  box-shadow:0 2px 6px -1px rgba(0,0,0,.3);
+  position:relative;
+  max-height:180px;overflow:hidden;
+}
+.tab:hover{transform:translateX(7px)}
+.tab.on{transform:translateX(0);font-weight:700;box-shadow:0 2px 8px -1px rgba(0,0,0,.45)}
+.tab .delx{
+  position:absolute;top:3px;left:2px;writing-mode:horizontal-tb;
+  width:17px;height:17px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(0,0,0,.28);color:#fff;font-size:11px;line-height:17px;padding:0;
+}
+.tab-add{background:transparent;color:var(--ink-soft);border:1.5px dashed #A99C82;border-radius:0 9px 9px 0}
+.tab-add:hover{transform:translateX(7px);color:var(--ink)}
+.manage-hint{
+  margin:-8px 0 16px;padding:9px 14px;border-radius:8px;
+  background:rgba(184,68,47,.07);border:1px solid rgba(184,68,47,.25);
+  font-size:12.5px;color:#8A4A3A;
+}
+
+/* ============ 空狀態 ============ */
+.empty{
+  padding:46px 20px;text-align:center;color:var(--ink-soft);
+  border:1.5px dashed var(--line);border-radius:12px;
+}
+.empty .big{font:700 17px/1.6 'Noto Serif TC',serif;color:#8A7A5E;letter-spacing:.08em}
+.empty p{font-size:13px;margin-top:8px;line-height:1.7}
+
+/* ============ Toast ============ */
+.toast{
+  position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
+  background:#3A332B;color:#F7F1E3;padding:11px 22px;border-radius:999px;
+  font-size:13.5px;opacity:0;pointer-events:none;z-index:99;
+  transition:opacity .25s, transform .25s;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  max-width:86vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ============ 手機 ============ */
+@media (max-width:720px){
+  :root{--pad-x:20px;--tab-w:34px}
+  .desk{padding:0}
+  .book{width:100%;height:100dvh;min-height:0;border-radius:0;box-shadow:none}
+  .book::before,.book::after{display:none}
+  .book-head{flex-wrap:wrap;row-gap:10px;padding:14px 100px 10px 18px}
+  .head-actions{flex:1 1 100%}
+  .seal{width:36px;height:36px;font:900 19px/36px 'Noto Serif TC',serif}
+  .head-text h1{font-size:17px}
+  .search{width:110px;padding:7px 11px;font-size:12.5px}
+  .head-actions .ghost{padding:6px 9px;font-size:11px}
+  .sheet{padding:18px 20px 56px 18px}
+  .ch-title{font-size:21px}
+  .grid{grid-template-columns:1fr 1fr;gap:12px}
+  .card-b{padding:10px 11px 11px}
+  .card-b h3{font-size:13.5px;min-height:2.6em}
+  .card .ing-preview{display:none}
+  .dt-title{font-size:24px}
+  .dt-cols{grid-template-columns:1fr;gap:24px}
+  .dt-img{max-height:300px}
+  .ribbon{right:52px;width:36px;height:80px;font-size:12.5px}
+  .tabs{top:96px;right:calc(var(--tab-w) * -1 + 6px);gap:6px;max-height:calc(100% - 200px)}
+  .tab{font-size:11px;padding:9px 0 7px;letter-spacing:.2em}
+  .tab .delx{width:15px;height:15px;font-size:10px;line-height:15px}
+}
+@media (max-width:380px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="desk">
+  <div class="book">
+    <div class="page">
+      <header class="book-head">
+        <div class="seal">食</div>
+        <div class="head-text">
+          <h1>我的食譜本</h1>
+          <p class="stat" id="statLine"></p>
+        </div>
+        <div class="head-actions">
+          <input class="search" id="q" placeholder="搜尋食譜、食材" autocomplete="off">
+          <button class="ghost" id="btnExport">備份</button>
+          <button class="ghost" id="btnImport">匯入</button>
+        </div>
+      </header>
+      <main class="sheet" id="sheet"></main>
+    </div>
+    <button class="ribbon" id="btnAdd">新食譜</button>
+    <nav class="tabs" id="tabs"></nav>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<input type="file" id="filePick" accept="image/*" hidden>
+<input type="file" id="importPick" accept=".json,application/json" hidden>
+
+<script>
+'use strict';
+/* 我的食譜本 v1 — 單機版（資料存這台裝置的 localStorage） */
+
+const KEY='cookbook_v1';
+const CB_VER='v1';
+const PALETTE=['#C96A4A','#D99A3D','#7C9A5E','#5E8C8A','#8A6A9E','#B05A7E','#B98A5A','#7A5A44','#4E7A5A','#A05A4A'];
+const $=s=>document.querySelector(s);
+
+let S=load();
+let UI={cat:'__all',view:{t:'list'},q:'',manage:false,img:'',hr:0};
+let lastViewKey='';
+
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(!raw) return {cats:[],recipes:[]};
+    const o=JSON.parse(raw);
+    return {cats:Array.isArray(o.cats)?o.cats:[],recipes:Array.isArray(o.recipes)?o.recipes:[]};
+  }catch(e){return {cats:[],recipes:[]};}
+}
+function persist(){
+  try{localStorage.setItem(KEY,JSON.stringify(S));}
+  catch(e){toast('存不進去了：這台裝置的空間滿了，先按「備份」匯出，再刪掉幾張截圖');}
+}
+function toast(msg){
+  const t=$('#toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),2400);
+}
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const lines=t=>String(t||'').split('\n').map(x=>x.trim()).filter(Boolean);
+const catOf=id=>S.cats.find(c=>c.id===id);
+const catName=id=>id?(catOf(id)?.name||'未分類'):'未分類';
+const catColor=id=>{const c=catOf(id);return c?c.color:'#A99C82';};
+function heartsHtml(r,cls){
+  let h='';
+  for(let i=1;i<=5;i++)h+=`<span class="${i<=r?'':'off'}">♥</span>`;
+  return `<span class="hearts ${cls||''}">${h}</span>`;
+}
+
+/* ================= 分頁（右側舌片） ================= */
+function renderTabs(){
+  const el=$('#tabs');
+  const tabs=[{id:'__all',name:'全部',color:'#5A5245'},...S.cats];
+  let h='';
+  for(const c of tabs){
+    h+=`<button class="tab ${UI.cat===c.id&&!UI.manage?'on':''}" data-tab="${c.id}" style="--c:${c.color}" title="${esc(c.name)}">${esc(c.name)}${UI.manage&&c.id!=='__all'?`<span class="delx" data-del="${c.id}">×</span>`:''}</button>`;
+  }
+  h+=`<button class="tab tab-add" data-tabadd="1" title="新增分頁">＋</button>`;
+  el.innerHTML=h;
+}
+$('#tabs').addEventListener('click',e=>{
+  const del=e.target.closest('.delx');
+  if(del){
+    e.stopPropagation();
+    const id=del.dataset.del;
+    const c=catOf(id);if(!c)return;
+    const n=S.recipes.filter(r=>r.cat===id).length;
+    if(!confirm(`刪除分頁「${c.name}」？${n?`裡面的 ${n} 道食譜會移到「未分類」。`:''}`))return;
+    S.recipes.forEach(r=>{if(r.cat===id)r.cat='';});
+    S.cats=S.cats.filter(x=>x.id!==id);
+    if(UI.cat===id)UI.cat='__all';
+    persist();render();toast('分頁刪掉了');
+    return;
+  }
+  const add=e.target.closest('[data-tabadd]');
+  if(add){
+    const name=(prompt('分頁名稱（例：家常菜、甜點、湯品）')||'').trim().slice(0,8);
+    if(!name)return;
+    if(S.cats.some(c=>c.name===name)){toast('已經有這個分頁了');return;}
+    const c={id:uid(),name,color:PALETTE[S.cats.length%PALETTE.length]};
+    S.cats.push(c);persist();render();
+    return;
+  }
+  const tab=e.target.closest('[data-tab]');
+  if(!tab)return;
+  const id=tab.dataset.tab;
+  if(UI.manage&&id!=='__all'){
+    const c=catOf(id);if(!c)return;
+    const name=(prompt('改分頁名稱',c.name)||'').trim().slice(0,8);
+    if(name&&name!==c.name){
+      if(S.cats.some(x=>x.id!==id&&x.name===name)){toast('已經有這個分頁了');return;}
+      c.name=name;persist();render();
+    }
+    return;
+  }
+  UI.cat=id;UI.view={t:'list'};render();
+});
+
+/* ================= 內頁 ================= */
+function bowlSvg(){return `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M7 26h34c0 9.5-7.6 15-17 15S7 35.5 7 26Z"/><path d="M16 19c0-3 2.5-3 2.5-5.5S16 10 16 8M26 19c0-3 2.5-3 2.5-5.5S26 10 26 8M36 19c0-3 2.5-3 2.5-5.5S36 10 36 8" opacity=".7"/></svg>`;}
+
+function renderSheet(){
+  const el=$('#sheet');
+  const key=UI.view.t+(UI.view.id||'')+(UI.q?'|q':'');
+  const inner=viewHtml();
+  el.innerHTML=`<div class="${key!==lastViewKey?'sheet-in':''}">${inner}</div>`;
+  lastViewKey=key;
+  el.scrollTop=0;
+  $('#btnAdd').classList.toggle('hide',UI.view.t==='form');
+  const all=S.recipes;
+  $('#statLine').textContent=`共 ${all.length} 道 · 做過 ${all.filter(r=>r.made).length} 道`;
+}
+
+function cardHtml(r){
+  const c=catColor(r.cat);
+  return `<article class="card" data-act="open" data-id="${r.id}">
+    <div class="ph">${r.img?`<img loading="lazy" src="${r.img}" alt="">`:`<div class="ph-fallback" style="--c:${c}">${bowlSvg()}</div>`}</div>
+    <div class="card-b">
+      <h3>${esc(r.title)||'（沒有名字的食譜）'}</h3>
+      <p class="ing-preview">${esc((r.ing&&r.ing[0])||'還沒寫食材')}</p>
+      <div class="card-meta">
+        <span class="cat-chip"><i style="background:${c}"></i>${esc(catName(r.cat))}</span>
+        ${r.made?'<span class="stamp">做過</span>':''}
+        ${r.hearts?heartsHtml(r.hearts):''}
+      </div>
+    </div>
+  </article>`;
+}
+
+function viewHtml(){
+  if(UI.view.t==='detail')return detailHtml(UI.view.id);
+  if(UI.view.t==='form')return formHtml(UI.view.id);
+  return listHtml();
+}
+
+function listHtml(){
+  const q=UI.q.trim().toLowerCase();
+  let list,head;
+  if(q){
+    list=S.recipes.filter(r=>
+      (r.title||'').toLowerCase().includes(q)||
+      (r.ing||[]).join(' ').toLowerCase().includes(q)||
+      (r.note||'').toLowerCase().includes(q)
+    );
+    head={title:`搜尋「${UI.q.trim()}」`,sub:`找到 ${list.length} 道`,manage:false};
+  }else{
+    list=(UI.cat==='__all'?S.recipes.slice():S.recipes.filter(r=>r.cat===UI.cat));
+    const nm=UI.cat==='__all'?'全部':catName(UI.cat);
+    head={title:nm,sub:`${list.length} 道 · 做過 ${list.filter(r=>r.made).length} 道`,manage:true};
+  }
+  list.sort((a,b)=>(b.updated||b.created||0)-(a.updated||a.created||0));
+  let h=`<div class="ch-head"><div class="grow"><h2 class="ch-title">${esc(head.title)}</h2><p class="ch-sub">${head.sub}</p></div>`;
+  h+=head.manage?`<button class="ghost sm" data-act="manage">${UI.manage?'完成管理':'管理分頁'}</button>`:'';
+  h+=`</div>`;
+  if(UI.manage&&!q)h+=`<div class="manage-hint">管理分頁：點右邊的分頁可以改名，按分頁上的 × 刪除（裡面的食譜會移到「未分類」，不會不見）。</div>`;
+  if(!list.length){
+    h+=`<div class="empty"><p class="big">${q?'找不到符合的食譜':'這一頁還是空白的'}</p><p>${q?'換個字試試看，或直接寫一道新的':'按右邊的「＋」新增分頁，再按紅色書籤寫下第一道食譜。'}</p></div>`;
+  }else{
+    h+=`<div class="grid">${list.map(cardHtml).join('')}</div>`;
+  }
+  return h;
+}
+
+function detailHtml(id){
+  const r=S.recipes.find(x=>x.id===id);
+  if(!r){UI.view={t:'list'};return listHtml();}
+  const back=UI.q.trim()?'回搜尋結果':(UI.cat==='__all'?'回全部':`回${catName(UI.cat)}`);
+  let h=`<div class="dt">
+    <div class="dt-top">
+      <button class="ghost sm" data-act="back">‹ ${esc(back)}</button>
+      <div class="dt-act">
+        <button class="ghost sm" data-act="edit" data-id="${r.id}">修改</button>
+        <button class="ghost sm danger" data-act="del" data-id="${r.id}">刪除</button>
+      </div>
+    </div>
+    <h2 class="dt-title">${esc(r.title)||'（沒有名字的食譜）'}</h2>
+    <div class="dt-meta">
+      <span class="cat-chip"><i style="background:${catColor(r.cat)}"></i>${esc(catName(r.cat))}</span>
+      ${heartsHtml(r.hearts)}
+      <button class="stamp ${r.made?'':'off'}" data-act="made" data-id="${r.id}">做過了</button>
+    </div>
+    ${r.img?`<img class="dt-img" src="${r.img}" alt="">`:''}`;
+  const ing=(r.ing||[]),st=(r.steps||[]);
+  if(ing.length||st.length){
+    h+=`<div class="dt-cols">
+      <section><h4>材料</h4>${ing.length?`<ul>${ing.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p class="src-line">還沒寫材料</p>'}</section>
+      <section><h4>做法</h4>${st.length?`<ol>${st.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:'<p class="src-line">還沒寫做法</p>'}</section>
+    </div>`;
+  }
+  if(r.note)h+=`<section class="note-block"><h4>試做心得</h4><p>${esc(r.note)}</p></section>`;
+  if(r.src)h+=`<p class="src-line">來源：<a href="${esc(r.src)}" target="_blank" rel="noopener">${esc(r.src)}</a></p>`;
+  if(!ing.length&&!st.length&&!r.img&&!r.note)h+=`<div class="dt-empty">這頁還是空白的——按右上「修改」把食材跟做法補上。</div>`;
+  h+=`</div>`;
+  return h;
+}
+
+function formHtml(id){
+  const r=id?S.recipes.find(x=>x.id===id):null;
+  if(id&&!r){UI.view={t:'list'};return listHtml();}
+  if(!UI._formOpened){UI.img=r?(r.img||''):'';UI.hr=r?(r.hearts||0):0;UI._formOpened=true;}
+  let catOpts=`<option value="" ${(!r||!r.cat)?'selected':''}>未分類</option>`;
+  for(const c of S.cats)catOpts+=`<option value="${c.id}" ${r&&r.cat===c.id?'selected':''}>${esc(c.name)}</option>`;
+  return `<div class="fm">
+    <div class="dt-top">
+      <button class="ghost sm" data-act="back">‹ 取消</button>
+    </div>
+    <h2>${r?'修改食譜':'寫一道新食譜'}</h2>
+    <label><span class="lb">食譜名</span><input type="text" id="fTitle" maxlength="40" placeholder="例：阿嬤的滷肉" value="${esc(r?.title||'')}"></label>
+    <label><span class="lb">分類</span><select id="fCat">${catOpts}</select></label>
+    <label><span class="lb">截圖<span class="hint">IG 或網路的食譜截圖都可以，存這裡就不用重新打字</span></span>
+      <div class="imgpick" id="prevWrap">${prevHtml()}</div>
+    </label>
+    <label><span class="lb">食材<span class="hint">一行一項</span></span>
+      <textarea id="fIng" rows="6" placeholder="雞蛋 2 顆&#10;醬油 2 大匙&#10;蔥 1 支">${esc((r?.ing||[]).join('\n'))}</textarea></label>
+    <label><span class="lb">做法<span class="hint">一行一步</span></span>
+      <textarea id="fSteps" rows="8" placeholder="開中小火熱鍋，放少許油&#10;把蛋打進去，煎到喜歡的熟度">${esc((r?.steps||[]).join('\n'))}</textarea></label>
+    <label><span class="lb">試做心得</span>
+      <textarea id="fNote" rows="3" placeholder="例如：醬油可以減半，下次試試看">${esc(r?.note||'')}</textarea></label>
+    <label><span class="lb">來源連結</span>
+      <input type="url" id="fSrc" placeholder="https://…" value="${esc(r?.src||'')}"></label>
+    <div class="frow" id="hrRow"><span class="lb">好吃指數</span>${hrBtns()}</div>
+    <label class="chk"><input type="checkbox" id="fMade" ${r?.made?'checked':''}> 做過了</label>
+    <button class="primary" data-act="save" data-id="${r?r.id:''}">${r?'存好修改':'存進食譜本'}</button>
+  </div>`;
+}
+function prevHtml(){
+  return UI.img
+    ?`<img class="prev" src="${UI.img}" alt=""><div class="ops"><button class="ghost sm" data-act="pickimg">換一張</button><button class="ghost sm danger" data-act="dropimg">拿掉截圖</button></div>`
+    :`<div class="noimg">${bowlSvg()}</div><div class="ops"><button class="ghost sm" data-act="pickimg">選截圖</button><span class="src-line" style="margin:0">也可以直接貼上（Ctrl+V）</span></div>`;
+}
+function hrBtns(){
+  let h='';
+  for(let i=1;i<=5;i++)h+=`<button type="button" class="hr-btn" data-hr="${i}"><span class="${i<=UI.hr?'':'off'}">♥</span></button>`;
+  h+=`<button type="button" class="hr-btn" data-hr="0" title="清除"><span class="off">↺</span></button>`;
+  return h;
+}
+
+/* ================= 圖片處理 ================= */
+function processImage(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=1200;
+      let w=img.width,h=img.height;
+      if(w>max||h>max){const k=max/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k);}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      const cx=cv.getContext('2d');
+      cx.fillStyle='#fff';cx.fillRect(0,0,w,h);
+      cx.drawImage(img,0,0,w,h);
+      UI.img=cv.toDataURL('image/jpeg',0.72);
+      const pw=$('#prevWrap');if(pw)pw.innerHTML=prevHtml();
+    };
+    img.onerror=()=>toast('這張圖讀不進去，換一張試試');
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+$('#filePick').addEventListener('change',e=>{
+  if(e.target.files&&e.target.files[0])processImage(e.target.files[0]);
+  e.target.value='';
+});
+document.addEventListener('paste',e=>{
+  if(UI.view.t!=='form')return;
+  const items=e.clipboardData&&e.clipboardData.items;
+  if(!items)return;
+  for(const it of items){
+    if(it.type&&it.type.startsWith('image/')){e.preventDefault();processImage(it.getAsFile());return;}
+  }
+});
+
+/* ================= 內頁互動 ================= */
+$('#sheet').addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(!el)return;
+  const act=el.dataset.act,id=el.dataset.id;
+  if(act==='open'){UI.view={t:'detail',id};UI._formOpened=false;render();}
+  else if(act==='back'){UI.view={t:'list'};UI._formOpened=false;render();}
+  else if(act==='edit'){UI.view={t:'form',id};UI._formOpened=false;render();}
+  else if(act==='del'){
+    const r=S.recipes.find(x=>x.id===id);if(!r)return;
+    if(!confirm(`把「${r.title||'沒有名字的食譜'}」從食譜本移除？這道就真的不見了。`))return;
+    S.recipes=S.recipes.filter(x=>x.id!==id);
+    persist();UI.view={t:'list'};render();toast('移除了');
+  }
+  else if(act==='made'){
+    const r=S.recipes.find(x=>x.id===id);if(!r)return;
+    r.made=!r.made;persist();render();
+    if(r.made)toast('做過了，厲害喔');
+  }
+  else if(act==='manage'){UI.manage=!UI.manage;render();}
+  else if(act==='pickimg'){$('#filePick').click();}
+  else if(act==='dropimg'){UI.img='';const pw=$('#prevWrap');if(pw)pw.innerHTML=prevHtml();}
+  else if(act==='save'){
+    const title=$('#fTitle').value.trim();
+    if(!title){toast('要先寫食譜名喔');$('#fTitle').focus();return;}
+    const data={
+      title,
+      cat:$('#fCat').value||'',
+      img:UI.img||'',
+      ing:lines($('#fIng').value),
+      steps:lines($('#fSteps').value),
+      note:$('#fNote').value.trim(),
+      src:$('#fSrc').value.trim(),
+      hearts:UI.hr||0,
+      made:$('#fMade').checked,
+      updated:Date.now()
+    };
+    if(id){
+      const r=S.recipes.find(x=>x.id===id);if(!r)return;
+      Object.assign(r,data);
+      UI.view={t:'detail',id};
+    }else{
+      const nid=uid();
+      S.recipes.push({id:nid,created:Date.now(),...data});
+      UI.view={t:'detail',id:nid};
+    }
+    UI._formOpened=false;
+    persist();render();toast('存好了');
+  }
+});
+$('#sheet').addEventListener('click',e=>{
+  const hr=e.target.closest('[data-hr]');
+  if(hr){UI.hr=Number(hr.dataset.hr);const row=$('#hrRow');if(row)row.innerHTML=`<span class="lb">好吃指數</span>${hrBtns()}`;}
+});
+
+/* ================= 頂列 ================= */
+$('#btnAdd').addEventListener('click',()=>{UI.view={t:'form'};UI._formOpened=false;render();});
+$('#q').addEventListener('input',e=>{
+  UI.q=e.target.value;
+  if(UI.view.t!=='list')UI.view={t:'list'};
+  renderSheet();
+});
+
+/* ================= 備份 / 匯入 ================= */
+$('#btnExport').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify({ver:CB_VER,exported:new Date().toISOString(),cats:S.cats,recipes:S.recipes},null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  const d=new Date(),pad=n=>String(n).padStart(2,'0');
+  a.href=URL.createObjectURL(blob);
+  a.download=`食譜本備份-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+  a.click();URL.revokeObjectURL(a.href);
+  toast('備份檔下載好了');
+});
+$('#btnImport').addEventListener('click',()=>$('#importPick').click());
+$('#importPick').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';
+  if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const o=JSON.parse(rd.result);
+      if(!o||!Array.isArray(o.cats)||!Array.isArray(o.recipes))throw 0;
+      if(!confirm(`匯入 ${o.recipes.length} 道食譜？會覆蓋這本現在的全部內容。`))return;
+      S={cats:o.cats,recipes:o.recipes};
+      persist();render();toast('匯入好了');
+    }catch(err){toast('這個檔案讀不進去，確定是備份檔嗎？');}
+  };
+  rd.readAsText(f);
+});
+
+/* ================= 啟動 ================= */
+function render(){renderTabs();renderSheet();}
+render();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
