@@ -1803,8 +1803,7 @@ function openOcrCrop(dataUrl,onOk,onCancel){
 }
 /* ---------- v132：從截圖讀文字（只分析，不自動填欄位） ---------- */
 var OCR_LANG_OPTIONS=[['chi_tra','繁體中文'],['eng','英文'],['jpn','日文'],['chi_sim','簡體中文'],['kor','韓文'],['fra','法文'],['deu','德文'],['spa','西班牙文']];
-var ocrShotLangs=['chi_tra','eng','jpn'],ocrShotRunId=0;
-try{var savedOcrLangs=JSON.parse(localStorage.getItem(KEY+'_ocrLanguages')||'null');if(Array.isArray(savedOcrLangs)){var known=OCR_LANG_OPTIONS.map(function(x){return x[0]});var valid=savedOcrLangs.filter(function(x,i,a){return known.indexOf(x)>=0&&a.indexOf(x)===i});if(valid.length)ocrShotLangs=valid}}catch(e){}
+var ocrShotLangs=['chi_tra'],ocrShotRunId=0;
 function ocrMultilingualLines(raw){
   var input=ocrRawLines(raw),seen=new Set(),lines=[];
   input.forEach(function(l){
@@ -1831,7 +1830,7 @@ function ocrMultilingualFields(lines){
   return f;
 }
 var ocrShotImg='',ocrShotLast={fields:[],lines:[],raw:''};
-function ocrShotOpen(){ocrShotRunId++;var ov=$('#ocrShotOverlay');if(!ov)return;ocrShotImg='';ov.classList.remove('hide');ocrShotRender('pick')}
+function ocrShotOpen(){ocrShotLangs=['chi_tra'];ocrShotRunId++;var ov=$('#ocrShotOverlay');if(!ov)return;ocrShotImg='';ov.classList.remove('hide');ocrShotRender('pick')}
 function ocrShotClose(){ocrShotRunId++;var ov=$('#ocrShotOverlay');if(ov)ov.classList.add('hide')}
 function ocrShotCopyFB(txt,done){
   try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();done&&done()}
@@ -1932,14 +1931,14 @@ function ocrShotRender(stage,payload){
   var body=$('#ocrShotBody');if(!body)return;body.scrollTop=0;
   if(stage==='pick'){
     body.innerHTML='<div class="ceBtns" style="margin-top:0"><button type="button" class="primary" id="ocrPickFile" style="flex:1;padding:15px 0;font-size:15.5px">選截圖／拍照</button><button type="button" id="ocrPickPaste" style="flex:1;padding:15px 0;font-size:15.5px">貼上圖片</button></div>'
-      +'<fieldset style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:12px 0;text-align:left"><legend>圖片裡的語言（可複選）</legend><div style="display:flex;flex-wrap:wrap;gap:12px">'+OCR_LANG_OPTIONS.map(function(x){return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;min-height:32px"><input type="checkbox" data-ocr-lang="'+x[0]+'"'+(ocrShotLangs.indexOf(x[0])>=0?' checked':'')+'>'+x[1]+'</label>'}).join('')+'</div><p style="font-size:12px;color:var(--ink2);line-height:1.6;margin:8px 0 0">同一個店名可混合多種語言，會一起辨識並保留原文。只勾圖片裡有的語言；選越多通常越慢，也不保證更準。首次需下載所選模型。</p></fieldset>'
+      +'<details style="margin-top:12px;text-align:left"><summary>需要辨識外文？展開選擇語言</summary><fieldset style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:12px 0;text-align:left"><legend>圖片裡的語言（可複選）</legend><div style="display:flex;flex-wrap:wrap;gap:12px">'+OCR_LANG_OPTIONS.map(function(x){return '<label style="display:flex;align-items:center;gap:6px;font-size:14px;min-height:32px"><input type="checkbox" data-ocr-lang="'+x[0]+'"'+(ocrShotLangs.indexOf(x[0])>=0?' checked':'')+'>'+x[1]+'</label>'}).join('')+'</div><p style="font-size:12px;color:var(--ink2);line-height:1.6;margin:8px 0 0">同一個店名可混合多種語言，會一起辨識並保留原文。只勾圖片裡有的語言；選越多通常越慢，也不保證更準。首次需下載所選模型。</p></fieldset></details>'
       +'<div id="ocrPasteHint" style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">選好後可在圖上<b>按住拖曳框出</b>要讀的那一塊（框小一點比較準），要讀整張時，可把選取框拉到整張圖片。電腦可先複製圖片再按 Ctrl+V。iPhone 原況照片（HEIC）可能讀不進來，請用截圖。</div>'
-      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">有明確欄位標籤時會自動填入空白的店名與地址。也可勾選多行文字，修改後填入店名、地址或簡介。請確認外文字母與門牌是否正確。</div>'
+      +'<div style="font-size:12px;color:#8A8674;margin-top:10px;text-align:left">預設繁體中文辨識。讀取後，每行可直接按「填入店名」或「填入地址」；簡介可勾選多行後確認填入。</div>'
       +'<textarea id="ocrPasteBox" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></textarea>';
     body.querySelectorAll('[data-ocr-lang]').forEach(function(b){b.addEventListener('change',function(){
       var chosen=Array.prototype.filter.call(body.querySelectorAll('[data-ocr-lang]'),function(x){return x.checked}).map(function(x){return x.getAttribute('data-ocr-lang')});
       if(!chosen.length){b.checked=true;toast('至少選一種語言');return}
-      ocrShotLangs=chosen;try{localStorage.setItem(KEY+'_ocrLanguages',JSON.stringify(chosen))}catch(e){}
+      ocrShotLangs=chosen;
     })});
     body.querySelector('#ocrPickFile').addEventListener('click',function(){
       var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
@@ -1982,29 +1981,19 @@ function ocrShotRender(stage,payload){
   h+='<label class="lb" style="margin-top:12px">辨識出的文字（'+lines.length+' 行）</label><div style="max-height:32vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px">';
   if(!lines.length)h+='<div style="font-size:12.5px;color:var(--ink2);padding:8px;text-align:left">沒有辨識出有用的文字 — 換張更清楚的截圖（字大一點、別疊在花背景上）再試一次。</div>';
   lines.forEach(function(l){
-    h+='<div style="display:flex;gap:6px;align-items:center;margin:3px 0"><span style="flex:1;min-width:0;font-size:14px;text-align:left;word-break:break-all">'+esc(l)+'</span><button type="button" class="miniBtn" data-cp="'+escAttr(l)+'" style="padding:5px 9px">複製</button></div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:5px 0;padding:6px 2px;border-bottom:1px solid var(--line)"><span style="flex:1 1 150px;min-width:0;font-size:14px;text-align:left;overflow-wrap:anywhere">'+esc(l)+'</span><div style="display:flex;flex-wrap:wrap;gap:5px"><button type="button" class="miniBtn" data-fill="name" data-val="'+escAttr(l)+'" style="padding:8px">填入店名</button><button type="button" class="miniBtn" data-fill="addr" data-val="'+escAttr(l)+'" style="padding:8px">填入地址</button><button type="button" class="miniBtn" data-cp="'+escAttr(l)+'" style="padding:8px">複製</button></div></div>';
   });
   h+='</div>';
   var introLines=ocrRawLines(r.raw||lines.join('\n'));
-  h+='<label class="lb" style="margin-top:12px">選擇要填入的文字（可勾多行）</label><div style="font-size:12px;text-align:left;color:var(--ink2)">混合語言店名可整串保留，跨行也可一起勾選。在下方確認文字，再選要填入的欄位。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
+  h+='<label class="lb" style="margin-top:12px">選擇要填入簡介的文字（可勾多行）</label><div style="font-size:12px;text-align:left;color:var(--ink2)">勾選想放入簡介的內容，可在下方修改，再按「確認填入簡介」。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
   introLines.forEach(function(l,i){h+='<label style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;overflow-wrap:anywhere"><input type="checkbox" data-intro-line="'+i+'" style="flex:none;margin-top:4px"><span>'+esc(l)+'</span></label>'});
-  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的文字" placeholder="勾選上方文字，或在這裡修改辨識結果" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" id="ocrSelectedName">填入店名</button><button type="button" id="ocrSelectedAddr">填入地址</button><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
+  h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的文字" placeholder="勾選上方文字，或在這裡修改辨識結果" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
   if(r.raw)h+='<details style="margin-top:8px;text-align:left"><summary style="font-size:12px;color:var(--ink2)">看原始辨識文字</summary><div style="font-size:11.5px;color:#8A8674;white-space:pre-wrap;max-height:20vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:6px">'+esc(r.raw)+'</div></details>';
   h+='<div class="ceBtns" style="margin-top:10px"><button type="button" class="primary" id="ocrShotCopyAll" style="flex:1">複製全部文字</button><button type="button" id="ocrShotAgain" style="flex:1">再讀一張</button></div>';
   body.innerHTML=h;
   body.querySelectorAll('[data-intro-line]').forEach(function(b){b.addEventListener('change',function(){
     body.querySelector('#ocrIntroDraft').value=Array.prototype.filter.call(body.querySelectorAll('[data-intro-line]'),function(c){return c.checked}).map(function(c){return introLines[+c.getAttribute('data-intro-line')]}).join('\n');
   })});
-  function fillSelected(kind){
-    var val=body.querySelector('#ocrIntroDraft').value.trim(),label=kind==='name'?'店名':'地址',el=kind==='name'?$('#fName'):$('#fAddr');
-    if(!val){toast('先勾選或輸入要填入的文字');return}
-    if(!el||el.disabled){toast('這個欄位目前不能修改');return}
-    val=val.replace(/\s*\n\s*/g,' ');
-    if(el.value.trim()&&!window.confirm('要用選取的文字取代原本的'+label+'嗎？'))return;
-    if(ocrShotFill(kind,val,true)){ocrShotClose();el.scrollIntoView({block:'center'});toast('已填入'+label+'，請確認後儲存圖釘');}
-  }
-  body.querySelector('#ocrSelectedName').addEventListener('click',function(){fillSelected('name')});
-  body.querySelector('#ocrSelectedAddr').addEventListener('click',function(){fillSelected('addr')});
   function fillIntro(append){
     var val=body.querySelector('#ocrIntroDraft').value.trim(),el=$('#fIntro');
     if(!val){toast('先勾選文字或輸入簡介');return}
@@ -2017,7 +2006,7 @@ function ocrShotRender(stage,payload){
   Array.prototype.forEach.call(body.querySelectorAll('[data-cp]'),function(b){b.addEventListener('click',function(){ocrShotCopy(b.getAttribute('data-cp'),b)})});
   Array.prototype.forEach.call(body.querySelectorAll('[data-fill]'),function(b){b.addEventListener('click',function(){
     var k=b.getAttribute('data-fill'),v=b.getAttribute('data-val');
-    if(ocrShotFill(k,v,true)){var o=b.textContent;b.textContent='已填入';setTimeout(function(){b.textContent=o},1200)}else toast('找不到欄位');
+    if(ocrShotFill(k,v,true)){var o=b.textContent;b.textContent='已填入';setTimeout(function(){b.textContent=o},1200)}else toast('這個欄位目前不能修改');
   })});
   var ca=body.querySelector('#ocrShotCopyAll');
   if(ca)ca.addEventListener('click',function(){
@@ -3000,7 +2989,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v139';
+var APP_VER='v140';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
