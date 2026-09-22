@@ -454,6 +454,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
 #ocrShotOverlay .ocrIntroActions{position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid var(--line);padding:10px 0 max(10px,env(safe-area-inset-bottom));margin-top:8px}
 #ocrShotOverlay .ocrIntroActions .ceBtns{margin-top:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 #ocrShotOverlay #ocrIntroStatus:empty{display:none}
+.revisitPinBadge{position:absolute;right:-9px;top:-9px;z-index:2;pointer-events:none;display:grid;place-items:center;width:19px;height:19px;border:2px solid white;border-radius:50%;background:#C44670;color:white;font-size:12px;line-height:1;box-shadow:0 1px 4px #0004}.revisitLabel{display:inline-block;background:#FBE8EF;color:#A32F55;border:1px solid #E4A0B5;border-radius:999px;padding:2px 8px;font-size:12px;white-space:nowrap}#revisitFilter.on{background:#C44670;color:#fff;border-color:#C44670}
 </style>
 </head>
 <body>
@@ -509,6 +510,7 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
     <div class="right">
       <button class="iconBtn" id="manageBtn" title="管理分類與顏色" aria-label="管理分類與顏色"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 1 1 9-9c0 2-1.4 3-3.2 3H16a2 2 0 0 0-1.6 3.2c.5.7.1 2.8-2.4 2.8z"/><circle cx="7.5" cy="11.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="10" cy="7.3" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.8" cy="7.3" r="1.1" fill="currentColor" stroke="none"/></svg></button>
       <span id="stats"></span>
+      <button type="button" class="chip" id="revisitFilter" aria-pressed="false">♥ 想再去</button>
       <div class="seg" id="statusSeg">
         <button data-s="all" class="on">全部</button>
         <button data-s="todo">還沒去</button>
@@ -578,6 +580,8 @@ textarea.txt{min-height:74px;resize:vertical;line-height:1.6}
         <button data-v="done">去過了</button>
       </div>
 
+      <label style="display:flex;gap:10px;align-items:center;margin:14px 0;min-height:44px"><input type="checkbox" id="fRevisit" style="width:22px;height:22px;accent-color:#C44670"><span>♥ 想再去</span></label>
+      <div style="font-size:12px;color:var(--ink2)">儲存後在地圖顯示愛心；想取消時再取消勾選。共用地圖只標記自己的意願。</div>
       <div id="doneExtra">
         <label class="lb" id="fRatingLabel">味道如何？喜歡程度</label>
         <div class="heartPick" id="fRating"></div>
@@ -710,7 +714,7 @@ var BASE_CATS=[
 ];
 var KEY='pocketPins.demo.v1';
 try{localStorage.setItem(KEY+'_t','1');localStorage.removeItem(KEY+'_t')}catch(e){setTimeout(function(){var d=document.createElement('div');d.style.cssText='position:fixed;left:12px;right:12px;bottom:80px;z-index:99999;background:#C62828;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,.3)';d.innerHTML='<b>\u26a0\ufe0f \u4f60\u73fe\u5728\u958b\u7684\u662f\u300c\u79c1\u5bc6\u700f\u89bd\u300d</b><br>\u9019\u500b\u6a21\u5f0f\u4e0b\u767b\u5165\u3001\u5730\u9ede\u90fd\u6703\u4e0d\u898b\uff01\u8acb\u95dc\u6389\uff0c\u56de\u5230\u6b63\u5e38\u6a21\u5f0f\u91cd\u65b0\u958b\u9019\u500b\u7db2\u5740\u3002';document.body.appendChild(d);setTimeout(function(){d.remove()},10000)},1500)}
-var S={user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{},avatarColor:'',avatarImage:'',ocrFixes:{},ocrCases:[]};
+var S={revisitOnly:false,user:null,pins:[],customCats:[],filterCats:new Set(),status:'all',q:'',editing:null,draft:{lat:null,lng:null},draftStatus:'todo',rating:0,view:'map',catColors:{},catNames:{},hiddenCats:[],statusColors:{done:'#1F7A6B',todo:'#E9A319'},pinColorMode:'cat',pinShape:{done:'solid',todo:'hollow'},catOrder:[],trash:{},avatarColor:'',avatarImage:'',ocrFixes:{},ocrCases:[]};
 function lastEmailGet(){try{return localStorage.getItem(KEY+'_lastEmail')||''}catch(e){return ''}}
 function lastEmailSet(v){try{if(v)localStorage.setItem(KEY+'_lastEmail',v)}catch(e){}}
 function localScopeKey(){return KEY+((AUTH&&AUTH.user&&AUTH.user.uid)?('_u_'+AUTH.user.uid):'_guest')}
@@ -757,7 +761,7 @@ function hslToHex(h,s,l){s/=100;l/=100;var k=function(n){return (n+h/30)%12},a=s
 function normHex(c){if(c&&c.charAt(0)==='#')return c;var m=String(c).match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);return m?hslToHex(+m[1],+m[2],+m[3]):'#888888'}
 function hashColor(s){var h=0;String(s).split('').forEach(function(ch){h=(h*31+ch.codePointAt(0))%360});return 'hsl('+h+',42%,44%)'}
 function applyState(d){if(!d)return;if(Array.isArray(d.pins))S.pins=d.pins;if(Array.isArray(d.customCats))S.customCats=d.customCats;if(d.catColors)S.catColors=d.catColors;if(d.catNames)S.catNames=d.catNames;if(d.hiddenCats)S.hiddenCats=d.hiddenCats;if(d.statusColors)S.statusColors=d.statusColors;if(d.pinColorMode)S.pinColorMode=d.pinColorMode;if(d.pinShape)S.pinShape=d.pinShape;if(Array.isArray(d.folders))S.folders=d.folders;if(Array.isArray(d.catOrder))S.catOrder=d.catOrder;if('avatarColor' in d)S.avatarColor=d.avatarColor||'';if('avatarImage' in d)S.avatarImage=d.avatarImage||'';S.ocrFixes=d.ocrFixes||{};S.ocrCases=Array.isArray(d.ocrCases)?d.ocrCases:[];if(d.trash){var t=S.trash||{};Object.keys(d.trash).forEach(function(k){t[k]=Math.max(t[k]||0,+(d.trash[k]||0))});S.trash=t}}
-function resetLocalState(){S.pins=[];S.customCats=[];S.catColors={};S.catNames={};S.hiddenCats=[];S.statusColors={done:'#1F7A6B',todo:'#E9A319'};S.pinColorMode='cat';S.pinShape={done:'solid',todo:'hollow'};S.catOrder=[];S.trash={};S.avatarColor='';S.avatarImage='';S.folders=[];S.shareView=false;S.sharedRoom='';S.ocrFixes={};S.ocrCases=[]}
+function resetLocalState(){S.revisitOnly=false;S.pins=[];S.customCats=[];S.catColors={};S.catNames={};S.hiddenCats=[];S.statusColors={done:'#1F7A6B',todo:'#E9A319'};S.pinColorMode='cat';S.pinShape={done:'solid',todo:'hollow'};S.catOrder=[];S.trash={};S.avatarColor='';S.avatarImage='';S.folders=[];S.shareView=false;S.sharedRoom='';S.ocrFixes={};S.ocrCases=[]}
 function byId(id){return document.getElementById(id)}
 function load(){resetLocalState();try{applyState(JSON.parse(localStorage.getItem(localScopeKey())||'{}'))}catch(e){}if(!S.trash)S.trash={};S.sharedRoom=scopedGet('_ws','');S.shareView=scopedGet('_sv','0')==='1';if(!myUid()){S.sharedRoom='';S.shareView=false}quarantineForeignPins()}
 function stateData(){return {pins:S.pins,customCats:S.customCats,folders:S.folders,catColors:S.catColors,catNames:S.catNames,hiddenCats:S.hiddenCats,statusColors:S.statusColors,pinColorMode:S.pinColorMode,pinShape:S.pinShape,catOrder:S.catOrder,trash:S.trash||{},avatarColor:S.avatarColor||'',avatarImage:S.avatarImage||'',ocrFixes:S.ocrFixes||{},ocrCases:S.ocrCases||[]}}
@@ -792,6 +796,16 @@ function ensureSharedPinMeta(p){
 function noteOf(p,uid){ensureSharedPinMeta(p);return (p&&p.memberNotes&&p.memberNotes[uid])||''}
 function ratingOf(p,uid){ensureSharedPinMeta(p);return +((p&&p.memberRatings&&p.memberRatings[uid])||0)}
 function currentUserNote(p){return isSharedMode()&&AUTH.user?noteOf(p,AUTH.user.uid):(p&&p.note||'')}
+function wantsRevisit(p){
+  if(!p)return false;
+  if(isSharedMode()){
+    var uid=myUid();if(!uid)return false;
+    if(p.memberRevisits&&Object.prototype.hasOwnProperty.call(p.memberRevisits,uid))return p.memberRevisits[uid]===true;
+    return p.ownerUid===uid&&p.revisit===true;
+  }
+  return p.revisit===true;
+}
+function revisitBadge(p){return wantsRevisit(p)?'<span class="revisitLabel">♥ 想再去</span>':''}
 function currentUserRating(p){return isSharedMode()&&AUTH.user?ratingOf(p,AUTH.user.uid):(p&&p.rating||0)}
 function canEditMainPin(p){if(!isSharedMode())return true;if(isArchivedRoom())return false;if(!p)return true;return !!(AUTH.user&&ownerUidOf(p)===AUTH.user.uid)}
 function canEditMySharedFields(){return !isArchivedRoom()&&!!AUTH.user}
@@ -1092,6 +1106,7 @@ function introBody(p){
   h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">';
   h+='<span style="background:'+ci.color+';color:#fff;border-radius:999px;padding:2px 10px;font-size:11.5px">'+esc(ci.name)+'</span>';
   h+='<span style="border:1.5px solid '+stc+';color:'+stc+';border-radius:999px;padding:1px 9px;font-size:11.5px">'+st+'</span>';
+  h+=revisitBadge(p);
   if(p.price)h+='<span style="border:1.5px solid var(--line);color:var(--ink2);border-radius:999px;padding:1px 9px;font-size:11.5px">'+esc(p.price)+'</span>';
   if(isSharedMode())h+=pinOwnerBadge(p);
   h+='</div>';
@@ -1241,9 +1256,10 @@ function renderMarkers(){
       el.style.setProperty('--c',stColor(p.status));
       el.style.setProperty('--cc',catColor(p.cat));
       el.title=p.name||'';
-      el.setAttribute('aria-label',p.name||'圖釘');
+      el.setAttribute('aria-label',(p.name||'圖釘')+(wantsRevisit(p)?'，想再去':''));
       el.addEventListener('click',function(ev){ev.stopPropagation();if(currentPopup&&currentPopup._pinId===p.id){closePopup()}else{openPopupFor(p)}});
       var wrap=document.createElement('span');wrap.className='pinwrap';wrap.appendChild(el);
+      if(wantsRevisit(p)){var heart=document.createElement('span');heart.className='revisitPinBadge';heart.textContent='♥';heart.setAttribute('aria-hidden','true');wrap.appendChild(heart)}
       next.push(new maplibregl.Marker({element:wrap,anchor:'bottom',subpixelPositioning:true}).setLngLat([p.lng,p.lat]).addTo(mapLib));
     }
     list.forEach(addPin);/* v126：不再合併圖釘，每一顆都畫在自己的座標上 */
@@ -1271,6 +1287,7 @@ function cardHtml(p){
     +'<div style="min-width:0;flex:1"><h3>'+esc(p.name||'（未命名）')+'</h3>'
     +'<div class="metaRow"><span class="badge" style="background:'+cc+'">'+esc(catOf(p.cat).name)+'</span>'
     +'<span class="stBadge '+p.status+'" style="background:'+stColor(p.status)+';color:#fff">'+(p.status==='done'?'去過了':'還沒去')+'</span>'
+    +revisitBadge(p)
     +(isSharedMode()?pinOwnerBadge(p):'')
     +(p.price?'<span class="badge outline" style="--c:'+cc+'">'+esc(p.price)+'</span>':'')
     +(p.folder&&folderName(p.folder)?'<span class="badge outline" style="--c:#8C9186">'+esc(folderName(p.folder))+'</span>':'')
@@ -1443,6 +1460,7 @@ function renderChips(){
 }
 function filtered(){
   return S.pins.filter(function(p){
+    if(S.revisitOnly&&!wantsRevisit(p))return false;
     if(S.folderSel&&p.folder!==S.folderSel)return false;
     if(S.filterCats.size&&!S.filterCats.has(p.cat))return false;
     if(S.status!=='all'&&p.status!==S.status)return false;
@@ -1466,7 +1484,7 @@ $('#todoGeo').addEventListener('click',function(e){
   var b=e.target.closest('[data-tg]');if(!b)return;
   openPin(+b.dataset.tg);
 });
-function renderAll(){renderBmChips();renderChips();renderMarkers();renderLegend();renderTodoGeo();renderList();updateStats()}
+function renderAll(){var rf=$('#revisitFilter');if(rf){rf.classList.toggle('on',!!S.revisitOnly);rf.setAttribute('aria-pressed',String(!!S.revisitOnly))}renderBmChips();renderChips();renderMarkers();renderLegend();renderTodoGeo();renderList();updateStats()}
 
 /* ---------- 新增/編輯彈窗 ---------- */
 function setStatusSeg(v){S.draftStatus=v;$$('#fStatus button').forEach(function(b){b.classList.toggle('on',b.dataset.v===v)});var de=$('#doneExtra');if(de)de.classList.toggle('hide',v!=='done')}
@@ -1544,6 +1562,8 @@ function openPin(id){
   S.draft={lat:(p&&p.lat!=null)?p.lat:null,lng:(p&&p.lng!=null)?p.lng:null};
   updateCoordTxt();
   setStatusSeg(p?p.status:'todo');
+  $('#fRevisit').checked=wantsRevisit(p);
+  $('#fRevisit').disabled=!!(shared&&archived);
   S.rating=p?(shared?currentUserRating(p):(p.rating||0)):0;
   renderHearts();renderCatChips(p?p.cat:'food');
   $('#copyToSharedBtn').classList.toggle('hide',shared||!p);
@@ -1804,6 +1824,31 @@ function openOcrCrop(dataUrl,onOk,onCancel){
 /* ---------- v132：從截圖讀文字（只分析，不自動填欄位） ---------- */
 var OCR_LANG_OPTIONS=[['chi_tra','繁體中文'],['eng','英文'],['jpn','日文'],['chi_sim','簡體中文'],['kor','韓文'],['fra','法文'],['deu','德文'],['spa','西班牙文']];
 var ocrShotLangs=['chi_tra'],ocrShotRunId=0;
+// Merge only adjacent, clearly continued address fragments; leave raw OCR available.
+function ocrJoinAddressLines(lines){
+  var out=[];
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i],compact=line.replace(/\s/g,''),joins=0;
+    var address=/(?:地址|位址)\s*[:：]/.test(line)||/(?:市|縣).*(?:路|街|巷|弄)/.test(compact);
+    while(address&&i+1<lines.length&&joins<3){
+      var next=lines[i+1].trim(),n=next.replace(/\s/g,'');
+      if(!n||n.length>60||/[:：]|電話|營業|時間|店名|名稱|地址|位址|https?:|白字強化/.test(n)||/[\u4e00-\u9fff]{2,3}[市縣].*[區鄉鎮]/.test(n))break;
+      var open=(line.match(/[（(]/g)||[]).length>(line.match(/[）)]/g)||[]).length;
+      var bracketTail=open&&/^[\p{L}\p{N}\s（()）之\-、.]+$/u.test(next)&&/[）)]\s*$/.test(next)&&!/\d{2,4}-\d{5,}/.test(n);
+      var numberTail=/(?:路|街|段|巷|弄)$/.test(compact)&&/^[0-9０-９一二三四五六七八九十百之-]+(?:段|巷|弄|號|号)(?:[0-9０-９一二三四五六七八九十之-]+(?:巷|弄|號|号|樓))*$/.test(n);
+      if(!bracketTail&&!numberTail)break;
+      var spacer=/[A-Za-z]$/.test(line)&&/^[A-Za-z]/.test(next)?' ':'';
+      line+=spacer+next;compact=line.replace(/\s/g,'');i++;joins++;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function ocrFillValue(kind,line){
+  if(kind==='addr')return line.replace(/^(?:(?:餐廳|餐厅|店家|門市|门市|商店)\s*)?(?:地址|位址)\s*[:：]\s*/,'').trim();
+  if(kind==='name')return line.replace(/^(?:(?:餐廳|餐厅|店家|門市|门市|商店)\s*)?(?:名稱|名称|店名)\s*[:：]\s*/,'').trim();
+  return line;
+}
 function ocrMultilingualLines(raw){
   var input=ocrRawLines(raw),seen=new Set(),lines=[];
   input.forEach(function(l){
@@ -1812,7 +1857,7 @@ function ocrMultilingualLines(raw){
     if(/^[\d,.]+\s*(?:個讚|則留言|likes?|comments?)$/i.test(l))return;
     if(seen.has(l))return;seen.add(l);lines.push(l);
   });
-  return {lines:lines,raw:input,dropped:input.length-lines.length};
+  return {lines:ocrJoinAddressLines(lines),raw:input,dropped:input.length-lines.length};
 }
 function ocrIncompleteAddress(line){
   var compact=String(line||'').replace(/\s+/g,'');
@@ -1958,7 +2003,7 @@ function ocrShotRender(stage,payload){
       +'<div style="font-size:11.5px;color:#8A8674;margin-top:8px;text-align:left">正在載入所選語言或辨識圖片。多語言首次下載較久；辨識仍在瀏覽器內進行，圖片不會送到辨識伺服器。</div>';
     return;
   }
-  var r=payload||{},lines=r.lines||[];
+  var r=payload||{},lines=ocrJoinAddressLines(r.lines||[]);
   var fields=[['店名',r.name],['地址',r.addr],['電話',r.phone],['捷運站',r.metro]].filter(function(x){return x[1]});
   ocrShotLast={fields:fields,lines:lines,raw:r.raw||''};
   var fN=ocrShotFill('name',r.name,false),fA=ocrShotFill('addr',r.addr,false);
@@ -1984,7 +2029,7 @@ function ocrShotRender(stage,payload){
     h+='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:5px 0;padding:6px 2px;border-bottom:1px solid var(--line)"><span style="flex:1 1 150px;min-width:0;font-size:14px;text-align:left;overflow-wrap:anywhere">'+esc(l)+'</span><div style="display:flex;flex-wrap:wrap;gap:5px"><button type="button" class="miniBtn" data-fill="name" data-val="'+escAttr(l)+'" style="padding:8px">填入店名</button><button type="button" class="miniBtn" data-fill="addr" data-val="'+escAttr(l)+'" style="padding:8px">填入地址</button><button type="button" class="miniBtn" data-cp="'+escAttr(l)+'" style="padding:8px">複製</button></div></div>';
   });
   h+='</div>';
-  var introLines=ocrRawLines(r.raw||lines.join('\n'));
+  var introLines=ocrJoinAddressLines(ocrRawLines(r.raw||lines.join('\n')));
   h+='<label class="lb" style="margin-top:12px">選擇要填入簡介的文字（可勾多行）</label><div style="font-size:12px;text-align:left;color:var(--ink2)">勾選想放入簡介的內容，可在下方修改，再按「確認填入簡介」。</div><div style="max-height:24vh;overflow:auto;text-align:left;margin:8px 0">';
   introLines.forEach(function(l,i){h+='<label style="display:flex;gap:8px;padding:7px 0;align-items:flex-start;overflow-wrap:anywhere"><input type="checkbox" data-intro-line="'+i+'" style="flex:none;margin-top:4px"><span>'+esc(l)+'</span></label>'});
   h+='</div><textarea class="txt" id="ocrIntroDraft" aria-label="準備填入的文字" placeholder="勾選上方文字，或在這裡修改辨識結果" style="width:100%;min-height:90px;box-sizing:border-box"></textarea><div class="ocrIntroActions"><div class="ceBtns"><button type="button" class="primary" id="ocrIntroFill">確認填入簡介</button><button type="button" id="ocrIntroAppend">加到原簡介後面</button></div><div id="ocrIntroStatus" role="status" style="font-size:12px;text-align:left;margin-top:6px"></div></div>';
@@ -2005,7 +2050,7 @@ function ocrShotRender(stage,payload){
   body.querySelector('#ocrIntroAppend').addEventListener('click',function(){fillIntro(true)});
   Array.prototype.forEach.call(body.querySelectorAll('[data-cp]'),function(b){b.addEventListener('click',function(){ocrShotCopy(b.getAttribute('data-cp'),b)})});
   Array.prototype.forEach.call(body.querySelectorAll('[data-fill]'),function(b){b.addEventListener('click',function(){
-    var k=b.getAttribute('data-fill'),v=b.getAttribute('data-val');
+    var k=b.getAttribute('data-fill'),v=ocrFillValue(k,b.getAttribute('data-val'));
     if(ocrShotFill(k,v,true)){var o=b.textContent;b.textContent='已填入';setTimeout(function(){b.textContent=o},1200)}else toast('這個欄位目前不能修改');
   })});
   var ca=body.querySelector('#ocrShotCopyAll');
@@ -2268,7 +2313,7 @@ $('#saveBtn').addEventListener('click',function(){
     var sel=$('#fCats .catChip.on');
     var data={
       name:name||cleanAddr(addrInput)||hostOf(url)||'未命名地點',url:url,cat:(S.draftCat||(sel?sel.dataset.id:'food')),
-      updated:Date.now(),status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
+      updated:Date.now(),revisit:$('#fRevisit').checked,status:S.draftStatus,rating:S.rating,note:$('#fNote').value.trim(),folder:S.draftFolder||'',
       price:priceVal(),pages:$$('#pagesBox textarea').map(function(t){return t.value.trim()}).filter(Boolean),pub:$('#fPub').checked,
       addr:cleanAddr(addrInput),intro:$('#fIntro').value.trim(),lat:S.draft.lat,lng:S.draft.lng
     };
@@ -2283,12 +2328,14 @@ $('#saveBtn').addEventListener('click',function(){
         ensureSharedPinMeta(p);
         p.memberNotes[uid]=data.note;
         p.memberRatings[uid]=data.rating;
+        if(!p.memberRevisits)p.memberRevisits={};
+        p.memberRevisits[uid]=data.revisit;p.updated=data.updated;
         if(canEditMainPin(p))Object.assign(p,data);
         if(ownerUidOf(p)===uid){p.note=data.note;p.rating=data.rating}
         saved=p;
         toast(canEditMainPin(p)?'已更新共用圖釘':'已更新你的心得');
       }else{
-        data.id=Date.now();data.created=Date.now();data.ownerUid=uid;data.memberNotes={};data.memberRatings={};data.memberNotes[uid]=data.note;data.memberRatings[uid]=data.rating;
+        data.id=Date.now();data.created=Date.now();data.ownerUid=uid;data.memberNotes={};data.memberRatings={};data.memberNotes[uid]=data.note;data.memberRatings[uid]=data.rating;data.memberRevisits={};data.memberRevisits[uid]=data.revisit;
         S.pins.push(data);saved=data;
         toast(saved&&saved.lat!=null?'已釘上共用地圖':'已加入共用地圖');
       }
@@ -2349,7 +2396,8 @@ $('#copyToPersonalBtn').addEventListener('click',function(){
   clone.id=Date.now();clone.created=Date.now();clone.updated=Date.now();clone.ownerUid=uid;
   clone.note=currentUserNote(p)||noteOf(p,ownerUidOf(p))||'';
   clone.rating=currentUserRating(p)||ratingOf(p,ownerUidOf(p))||0;
-  delete clone.memberNotes;delete clone.memberRatings;
+  clone.revisit=wantsRevisit(p);
+  delete clone.memberRevisits;delete clone.memberNotes;delete clone.memberRatings;
   FB.db.ref('users/'+uid).once('value').then(function(s){
     var d=s.val()||{};if(!Array.isArray(d.pins))d.pins=[];d.pins.push(clone);
     return FB.db.ref('users/'+uid).update({pins:d.pins,_t:Date.now()});
@@ -2361,6 +2409,7 @@ function sharedPinCopy(p,uid,includeNote){
   c.id='copy_'+uid+'_'+p.id;c.sourcePersonalId=String(p.id);c.ownerUid=uid;
   c.created=Date.now();c.updated=c.created;c.pub=false;c.folder='';
   c.note=includeNote?(p.note||''):'';c.rating=includeNote?(p.rating||0):0;
+  c.memberRevisits={};c.memberRevisits[uid]=c.revisit===true;
   c.memberNotes={};c.memberRatings={};c.memberNotes[uid]=c.note;c.memberRatings[uid]=c.rating;
   return c;
 }
@@ -2450,6 +2499,7 @@ function renderLegend(){
   el.innerHTML='<b>怎麼看圖釘</b>'
     +lg('done')
     +lg('todo')
+    +'<div class="lgRow"><span class="revisitLabel">♥</span>想再去</div>'
     ;
 }
 function swatchHtml(color,label){
@@ -2563,6 +2613,7 @@ $('#viewTabs').addEventListener('click',function(e){
   $('#listView').classList.toggle('hide',S.view!=='list');
   if(S.view==='map'&&mapLib)mapLib.resize();
 });
+$('#revisitFilter').addEventListener('click',function(){S.revisitOnly=!S.revisitOnly;renderAll()});
 $('#statusSeg').addEventListener('click',function(e){
   var b=e.target.closest('button');if(!b)return;
   $$('#statusSeg button').forEach(function(x){x.classList.toggle('on',x===b)});
@@ -2989,7 +3040,7 @@ document.addEventListener('click',function(e){
   if(m&&!e.target.closest('#meMenu')&&!e.target.closest('#avatarBtn'))m.remove();
 });
 
-var APP_VER='v140';
+var APP_VER='v142';
 /* v69：自動檢查更新 — 開啟時比對 GitHub 上的版本號，有新版自動重整 */
 (function(){
   var SWKEY='pocketPins.lv';
